@@ -1,0 +1,102 @@
+<div class="workspace">
+  <aside class="sidebar" [class.mobile-open]="showSidebar()">
+    <a class="brand" routerLink="/chat"
+      ><span class="brand-mark">✳</span
+      ><span>Im<span class="cyan">AI</span><small>YOUR KNOWLEDGE. CONNECTED.</small></span></a
+    >
+    <button class="new-chat" (click)="startNewChat()">
+      ＋ <span>New conversation</span><kbd>↵</kbd>
+    </button>
+    <div class="nav-label">WORKSPACE</div>
+    <nav>
+      <a routerLink="/chat" routerLinkActive="active" (click)="showSidebar.set(false)"
+        ><span>◈</span> Chat <small>01</small></a
+      ><a routerLink="/documents" routerLinkActive="active" (click)="showSidebar.set(false)"
+        ><span>▤</span> Manage documents <small>{{ documentService.documents().length }}</small></a
+      >
+    </nav>
+    <div class="history-heading nav-label">
+      RECENT CONVERSATIONS <span>{{ chatService.threads().length }}</span>
+    </div>
+    <div class="history">
+      <div
+        class="thread"
+        *ngFor="let thread of chatService.threads()"
+        [class.selected]="chatService.activeThreadId() === thread.id"
+      >
+        <button (click)="onSelectThread(thread.id)"><span>↳</span>{{ thread.title }}</button
+        ><button
+          class="remove"
+          aria-label="Delete conversation"
+          (click)="onDeleteThread($event, thread.id)"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="knowledge-status">
+        <span class="status-dot"></span> KNOWLEDGE BASE
+        <strong>{{ documentService.readyDocumentsCount() }} documents ready</strong>
+        <div class="status-line"></div>
+        <small>Local preview · simulated retrieval</small>
+      </div>
+      <div class="profile">
+        <span class="avatar">{{
+          authService.currentUser() ? authService.currentUser()!.name.charAt(0).toUpperCase() : 'G'
+        }}</span>
+        <div>
+          <strong>{{ authService.currentUser()?.name || 'Guest explorer' }}</strong
+          ><small>{{
+            authService.isAuthenticated() ? 'Member workspace' : 'Limited workspace access'
+          }}</small>
+        </div>
+        <button
+          *ngIf="authService.isAuthenticated()"
+          (click)="authService.logout()"
+          title="Sign out"
+        >
+          ↪</button
+        ><a *ngIf="!authService.isAuthenticated()" routerLink="/login" title="Sign in">↗</a>
+      </div>
+    </div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <button
+          class="menu-toggle"
+          (click)="toggleSidebarVisibility()"
+          aria-label="Toggle navigation"
+        >
+          ☰</button
+        ><span class="workspace-icon">⌘</span> Personal workspace <span class="slash">/</span>
+        <span class="topbar-muted">{{
+          router.url.includes('documents') ? 'Documents' : 'Chat'
+        }}</span>
+      </div>
+      <div class="topbar-right">
+        <span class="demo-label">PREVIEW</span
+        ><span class="connection"><i class="status-dot"></i> Local mode</span>
+      </div>
+    </header>
+    <div class="route-content"><router-outlet /></div>
+    <footer class="workspace-footer">
+      <span
+        ><i class="status-dot"></i> ImAI SYSTEM <span class="muted">/ FRONTEND PREVIEW</span></span
+      ><span>RETRIEVE. REASON. RESPOND. <b>✧</b></span>
+    </footer>
+  </main>
+  <aside
+    class="citation-drawer"
+    *ngIf="chatService.isCitationDrawerOpen() && chatService.activeCitation() as citation"
+  >
+    <button class="close" (click)="closeDrawer()" aria-label="Close source">×</button>
+    <div class="eyebrow">SOURCE INSPECTOR / {{ citation.index }}</div>
+    <h2>{{ citation.documentTitle }}</h2>
+    <span class="pill">Sample citation · page {{ citation.pageNumber }}</span>
+    <blockquote>{{ citation.snippet }}</blockquote>
+    <p class="muted">{{ citation.chunkId }}</p>
+    <p class="muted">Sample source from the frontend demo. Live retrieval is not connected.</p>
+  </aside>
+</div>

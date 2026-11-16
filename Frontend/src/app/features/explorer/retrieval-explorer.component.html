@@ -1,0 +1,99 @@
+<div class="explorer-page">
+  <div class="page-header">
+    <div class="header-titles">
+      <h2 class="title">Vector Retrieval Explorer</h2>
+      <p class="subtitle">
+        Debug semantic search queries against vector indexes and inspect ranked chunk relevance before LLM generation.
+      </p>
+    </div>
+  </div>
+
+  <!-- Search Panel -->
+  <div class="search-panel">
+    <div class="query-row">
+      <div class="input-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+          type="text"
+          [(ngModel)]="searchQuery"
+          (keydown.enter)="executeSearch()"
+          placeholder="Test a semantic search query against vector embeddings..."
+        />
+      </div>
+
+      <button class="btn-search" [disabled]="isSearching" (click)="executeSearch()">
+        <span *ngIf="!isSearching">Execute Retrieval</span>
+        <span *ngIf="isSearching">Scanning Vectors...</span>
+      </button>
+    </div>
+
+    <!-- Parameter Sliders -->
+    <div class="params-row">
+      <div class="param-item">
+        <label>Knowledge Collection</label>
+        <select [(ngModel)]="selectedCollection">
+          <option value="all">All Collections</option>
+          <option *ngFor="let col of settingsService.defaultCollections" [value]="col.id">
+            {{ col.name }}
+          </option>
+        </select>
+      </div>
+
+      <div class="param-item">
+        <div class="label-row">
+          <label>Top-K Results</label>
+          <span class="param-val">{{ topK }}</span>
+        </div>
+        <input type="range" [(ngModel)]="topK" min="1" max="15" step="1" />
+      </div>
+
+      <div class="param-item">
+        <div class="label-row">
+          <label>Cosine Cutoff Threshold</label>
+          <span class="param-val">{{ threshold }}</span>
+        </div>
+        <input type="range" [(ngModel)]="threshold" min="0.5" max="0.95" step="0.05" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Retrieval Results Header -->
+  <div class="results-header">
+    <div class="results-count">
+      <span>{{ searchResults.length }} Chunks Retrieved</span>
+      <span class="timing-badge">Latency: {{ searchLatencyMs }}ms</span>
+    </div>
+  </div>
+
+  <!-- Ranked Chunks Grid -->
+  <div class="chunks-list">
+    <div *ngFor="let chunk of searchResults; let i = index" class="chunk-card">
+      <div class="chunk-top">
+        <div class="rank-badge">#{{ i + 1 }}</div>
+        <div class="chunk-doc-info">
+          <h4 class="doc-title">{{ chunk.documentTitle }}</h4>
+          <span class="doc-meta">
+            {{ chunk.chunkId }} • Page {{ chunk.pageNumber }} • {{ chunk.collection }}
+          </span>
+        </div>
+        <div class="score-badge">
+          <span class="score-number">{{ (chunk.score * 100).toFixed(1) }}%</span>
+          <span class="score-sub">Cosine Match</span>
+        </div>
+      </div>
+
+      <div class="chunk-body">
+        {{ chunk.content }}
+      </div>
+
+      <div class="chunk-footer">
+        <div class="similarity-bar">
+          <div class="similarity-fill" [style.width.%]="chunk.score * 100"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,207 @@
+<section class="documents-page">
+  <div class="page-heading">
+    <div>
+      <div class="eyebrow">YOUR KNOWLEDGE LAYER</div>
+      <h1>Manage documents<span>.</span></h1>
+      <p>A home for the information behind every conversation.</p>
+    </div>
+    <button class="btn-primary" (click)="openUploadModal()">＋ Upload document</button>
+  </div>
+  <div class="guest-banner" *ngIf="!authService.canManageDocuments()">
+    <span>◇</span>
+    <div>
+      <strong>Explore freely. Add more when you're ready.</strong>
+      <p>
+        Guests can chat and browse sample documents. Member preview unlocks uploads and deletion.
+      </p>
+    </div>
+    <button (click)="requestAccess()">Try member preview ↗</button>
+  </div>
+  <div class="stats">
+    <div>
+      <span>DOCUMENTS</span
+      ><strong
+        >{{ documentService.documents().length.toString().padStart(2, '0')
+        }}<small>in your library</small></strong
+      >
+    </div>
+    <div>
+      <span>READY TO EXPLORE</span
+      ><strong
+        >{{ documentService.readyDocumentsCount().toString().padStart(2, '0')
+        }}<small>sample indexed documents</small></strong
+      >
+    </div>
+    <div>
+      <span>KNOWLEDGE CHUNKS</span
+      ><strong>{{ documentService.totalVectors() }}<small>simulated vector chunks</small></strong>
+    </div>
+  </div>
+  <div class="library-heading">
+    <h2>
+      Document library <span>{{ filteredDocuments.length }}</span>
+    </h2>
+    <div class="filters">
+      <input
+        type="search"
+        aria-label="Search documents"
+        [(ngModel)]="searchQuery"
+        placeholder="Search documents…"
+      /><select [(ngModel)]="selectedFilterCollection" aria-label="Filter by collection">
+        <option value="all">All collections</option>
+        <option *ngFor="let col of collections" [value]="col.id">{{ col.name }}</option>
+      </select>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>DOCUMENT NAME</th>
+          <th>COLLECTION</th>
+          <th>STATUS</th>
+          <th>SIZE</th>
+          <th>ADDED</th>
+          <th><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let doc of filteredDocuments">
+          <td>
+            <div class="doc-name">
+              <span class="file-icon">{{
+                doc.type === 'pdf' ? 'PDF' : doc.type.toUpperCase().slice(0, 3)
+              }}</span>
+              <div>
+                <strong>{{ doc.title }}</strong
+                ><small>{{ doc.filename }}</small>
+              </div>
+            </div>
+          </td>
+          <td>
+            <span class="collection">{{ doc.collection.replace('-', ' ') }}</span>
+          </td>
+          <td>
+            <span class="doc-status" [class.processing]="doc.status !== 'ready'"
+              ><i class="status-dot"></i>{{ doc.status === 'ready' ? 'Ready' : doc.status }}</span
+            >
+          </td>
+          <td>{{ formatBytes(doc.sizeBytes) }}</td>
+          <td>{{ doc.uploadedAt | date: 'MMM d, y' }}</td>
+          <td>
+            <button
+              class="delete-btn"
+              (click)="deleteDocument(doc.id)"
+              [attr.aria-label]="
+                (authService.canManageDocuments() ? 'Delete ' : 'Sign in to delete ') + doc.title
+              "
+              [title]="
+                authService.canManageDocuments() ? 'Delete document' : 'Member preview required'
+              "
+            >
+              {{ authService.canManageDocuments() ? '×' : '⌑' }}
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="empty" *ngIf="!filteredDocuments.length">
+      <span>⌕</span>
+      <h3>No documents found</h3>
+      <p>
+        {{
+          searchQuery || selectedFilterCollection !== 'all'
+            ? 'Try another search or collection.'
+            : 'Upload your first document to grow your library.'
+        }}
+      </p>
+    </div>
+  </div>
+  <div class="library-footer">
+    <span>{{ filteredDocuments.length }} documents · PDF, DOCX, Markdown, TXT, CSV, JSON</span
+    ><span>LOCAL DEMO LIBRARY</span>
+  </div>
+  <div
+    class="modal-overlay"
+    *ngIf="isUploadModalOpen || pendingDeleteId"
+    (click)="closeUploadModal(); pendingDeleteId = null"
+  ></div>
+  <section
+    class="modal-card"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="upload-title"
+    *ngIf="isUploadModalOpen"
+  >
+    <header>
+      <div>
+        <div class="eyebrow">GROW YOUR KNOWLEDGE</div>
+        <h2 id="upload-title">Upload a document</h2>
+      </div>
+      <button (click)="closeUploadModal()" aria-label="Close upload">×</button>
+    </header>
+    <p>
+      Files are selected locally. Upload and indexing are simulated in this frontend preview;
+      refresh resets the library.
+    </p>
+    <label
+      class="dropzone"
+      [class.drag-active]="dragActive"
+      (dragover)="$event.preventDefault(); dragActive = true"
+      (dragleave)="dragActive = false"
+      (drop)="onDrop($event)"
+      ><span>↥</span
+      ><strong>{{ selectedFile?.name || 'Drop a document here or browse files' }}</strong
+      ><small>PDF, DOCX, MD, TXT, CSV, JSON · up to 50 MB</small
+      ><input
+        type="file"
+        (change)="selectFile($event)"
+        accept=".pdf,.docx,.md,.markdown,.txt,.csv,.json"
+        aria-label="Choose document"
+    /></label>
+    <p class="error" role="alert" *ngIf="uploadError">{{ uploadError }}</p>
+    <label class="form-field"
+      >Document title<input
+        [(ngModel)]="newDocTitle"
+        placeholder="Give your document a name" /></label
+    ><label class="form-field"
+      >Collection<select [(ngModel)]="newDocCollection">
+        <option *ngFor="let col of collections" [value]="col.id">{{ col.name }}</option>
+      </select></label
+    ><label class="form-field"
+      >Description <span class="muted">(optional)</span
+      ><textarea
+        [(ngModel)]="newDocDescription"
+        rows="2"
+        placeholder="What's inside this document?"
+      ></textarea>
+    </label>
+    <footer>
+      <button class="btn-secondary" (click)="closeUploadModal()">Cancel</button
+      ><button
+        class="btn-primary"
+        (click)="submitNewDocument()"
+        [disabled]="!selectedFile || !newDocTitle.trim()"
+      >
+        Add to demo library ↗
+      </button>
+    </footer>
+  </section>
+  <section
+    class="modal-card delete-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="delete-title"
+    *ngIf="pendingDeleteId"
+  >
+    <h2 id="delete-title">Delete this document?</h2>
+    <p>
+      This removes it from the current demo library. Existing sample conversations keep their
+      citations.
+    </p>
+    <footer>
+      <button class="btn-secondary" (click)="pendingDeleteId = null">Keep document</button
+      ><button class="btn-danger" (click)="confirmDelete()">Delete document</button>
+    </footer>
+  </section>
+</section>

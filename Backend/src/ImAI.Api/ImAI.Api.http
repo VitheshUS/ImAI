@@ -1,0 +1,15 @@
+﻿@ImAI = http://localhost:5100
+
+GET {{ImAI}}/health
+
+### Dummy chat
+POST {{ImAI}}/api/chat
+Content-Type: application/json
+
+{"query":"How does retrieval work?"}
+
+### Invalid input -> Problem Details
+POST {{ImAI}}/api/chat
+Content-Type: application/json
+
+{"query":""}

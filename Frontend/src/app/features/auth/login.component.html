@@ -1,0 +1,37 @@
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="login-symbol">✳</div>
+      <h1 class="brand-name">Im<span class="cyan">AI</span></h1>
+      <p class="brand-sub">A workspace for your curiosity.</p>
+    </div>
+    <span class="eyebrow">MEMBER PREVIEW</span>
+    <h2>Make room for more knowledge.</h2>
+    <p class="login-description">
+      Try document uploads and library management with a local demo session.
+    </p>
+    <div class="error-banner" role="alert" *ngIf="errorMessage">{{ errorMessage }}</div>
+    <form class="auth-form" (ngSubmit)="onSubmit()">
+      <div class="form-group">
+        <label for="email">Email address</label
+        ><input
+          id="email"
+          type="email"
+          [(ngModel)]="email"
+          name="email"
+          placeholder="you@example.com"
+          required
+          autocomplete="email"
+        />
+      </div>
+      <button type="submit" class="btn-submit" [disabled]="isLoading">
+        {{ isLoading ? 'Opening workspace…' : 'Continue to member preview ↗' }}
+      </button>
+    </form>
+    <p class="login-note">
+      No password required. This preview does not verify identity. A demo session is restored
+      silently in this tab for 8 hours.
+    </p>
+    <button class="btn-bypass" (click)="continueAsGuest()">Continue as guest →</button>
+  </div>
+</div>

@@ -1,0 +1,115 @@
+<div class="chat-page">
+  <div class="chat-toolbar">
+    <div>
+      <span class="eyebrow">INTELLIGENCE WORKSPACE</span>
+      <h1>
+        {{
+          chatService.activeThread()?.messages?.length
+            ? 'Your conversation'
+            : 'A little curiosity. Infinite possibilities.'
+        }}
+      </h1>
+    </div>
+    <span class="pill"><i class="status-dot"></i> Knowledge chat</span>
+  </div>
+  <div class="messages" #messagesContainer aria-live="polite">
+    @if (!chatService.activeThread()?.messages?.length) {
+      <section class="welcome">
+        <div class="orb"><span>✳</span><i class="orb-point"></i></div>
+        <div class="eyebrow">THINK BEYOND THE SEARCH BAR</div>
+        <h2>Your knowledge,<br /><span>one conversation away.</span></h2>
+        <p>
+          Connect the dots across your documents.<br />Ask a question. Find clarity. Follow the
+          source.
+        </p>
+        <div class="suggestions">
+          <button
+            *ngFor="let question of starterQuestions; let i = index"
+            (click)="selectStarterQuestion(question)"
+          >
+            <span class="suggestion-icon">{{ ['⌕', '▤', '◇', '↗'][i] }}</span
+            ><strong>{{
+              [
+                'Explore your knowledge',
+                'Understand the details',
+                'Connect the dots',
+                'Get the bigger picture',
+              ][i]
+            }}</strong
+            ><span>{{ question }}</span
+            ><b>↗</b>
+          </button>
+        </div>
+      </section>
+    } @else {
+      <div class="message-list">
+        <article
+          *ngFor="let message of chatService.activeThread()?.messages"
+          [class.user]="message.role === 'user'"
+        >
+          <div class="message-avatar">{{ message.role === 'user' ? 'U' : '✳' }}</div>
+          <div class="message-body">
+            <div class="message-meta">
+              {{ message.role === 'user' ? 'You' : 'ImAI'
+              }}<small>{{ message.timestamp | date: 'shortTime' }}</small
+              ><span *ngIf="message.role === 'assistant'">DEMO RESPONSE</span>
+            </div>
+            <div class="message-text">{{ message.content }}</div>
+            <div class="citations" *ngIf="message.citations?.length">
+              <button
+                *ngFor="let citation of message.citations"
+                (click)="onInspectCitation(citation)"
+              >
+                <span>{{ citation.index }}</span
+                >{{ citation.documentTitle }} ↗
+              </button>
+            </div>
+          </div>
+        </article>
+        <div class="generating" *ngIf="chatService.isGenerating()">
+          <span class="status-dot"></span> Preparing a sample response…
+        </div>
+      </div>
+    }
+  </div>
+  <div class="composer-area">
+    <div class="context-row">
+      <span><i class="status-dot"></i> KNOWLEDGE CONTEXT</span
+      ><select
+        aria-label="Knowledge collection"
+        [ngModel]="settingsService.settings().activeCollectionId"
+        (ngModelChange)="settingsService.updateSettings({ activeCollectionId: $event })"
+      >
+        <option *ngFor="let col of settingsService.defaultCollections" [value]="col.id">
+          {{ col.name }}
+        </option>
+      </select>
+    </div>
+    <div class="composer">
+      <textarea
+        #promptTextarea
+        [(ngModel)]="userPrompt"
+        (keydown)="onKeyDown($event)"
+        placeholder="Ask anything about your knowledge base…"
+        aria-label="Message ImAI"
+        rows="2"
+      ></textarea>
+      <div class="composer-actions">
+        <a routerLink="/documents" title="Manage documents">＋ <span>Add knowledge</span></a>
+        <div>
+          <small>Enter to send <span>·</span> Shift + Enter for a new line</small
+          ><button
+            (click)="onSendMessage()"
+            [disabled]="!userPrompt.trim() || chatService.isGenerating()"
+            aria-label="Send message"
+          >
+            ↑
+          </button>
+        </div>
+      </div>
+    </div>
+    <p class="composer-hint">
+      ✧ Frontend demo. Responses and citations are simulated. Always verify the source.
+    </p>
+  </div>
+</div>

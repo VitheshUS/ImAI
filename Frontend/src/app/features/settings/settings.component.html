@@ -1,0 +1,226 @@
+<div class="settings-page">
+  <div class="page-header">
+    <div class="header-titles">
+      <h2 class="title">RAG Engine & System Configuration</h2>
+      <p class="subtitle">
+        Fine-tune retrieval thresholds, model temperature, citation constraints, and authentication providers.
+      </p>
+    </div>
+    <div class="header-actions">
+      <button class="btn-secondary" (click)="onReset()">Reset Defaults</button>
+      <button class="btn-primary" (click)="onSave()">Save Pipeline Config</button>
+    </div>
+  </div>
+
+  <!-- Success Toast -->
+  <div class="toast-success" *ngIf="isSavedToastVisible">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="20 6 9 17 4 12"></polyline>
+    </svg>
+    <span>RAG Pipeline parameters updated successfully!</span>
+  </div>
+
+  <div class="settings-grid">
+    <!-- Left Column: LLM & Retrieval Parameters -->
+    <div class="settings-col">
+      <!-- LLM Selection Section -->
+      <section class="config-card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+          </div>
+          <div>
+            <h3 class="card-title">Generative Model & Temperature</h3>
+            <p class="card-desc">Select the LLM that synthesizes answers from retrieved chunks</p>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="form-group">
+            <label>Model Architecture</label>
+            <select [(ngModel)]="settings.model">
+              <option *ngFor="let m of settingsService.availableModels" [value]="m.id">
+                {{ m.name }} • {{ m.provider }} ({{ m.contextWindow }})
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <div class="label-row">
+              <label>Temperature (Hallucination Control)</label>
+              <span class="mono-val">{{ settings.temperature }}</span>
+            </div>
+            <input type="range" [(ngModel)]="settings.temperature" min="0" max="1" step="0.05" />
+            <span class="field-hint">Lower values (0.1 - 0.3) provide strict adherence to retrieved text.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Retrieval Parameters Section -->
+      <section class="config-card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </div>
+          <div>
+            <h3 class="card-title">Vector Retrieval & Scoring</h3>
+            <p class="card-desc">Configure top-K chunks and semantic search strategies</p>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="form-group">
+            <label>Search Algorithm Strategy</label>
+            <div class="radio-cards">
+              <label class="radio-card" [class.selected]="settings.searchType === 'hybrid'">
+                <input type="radio" [(ngModel)]="settings.searchType" value="hybrid" />
+                <span class="radio-title">Hybrid (Dense + Sparse BM25)</span>
+                <span class="radio-sub">Best for keyword precision and semantic meaning combined.</span>
+              </label>
+
+              <label class="radio-card" [class.selected]="settings.searchType === 'dense_vector'">
+                <input type="radio" [(ngModel)]="settings.searchType" value="dense_vector" />
+                <span class="radio-title">Dense Vector Only (HNSW)</span>
+                <span class="radio-sub">Focuses purely on high-dimensional cosine similarity.</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <div class="label-row">
+                <label>Top-K Chunks to Retrieve</label>
+                <span class="mono-val">{{ settings.retrievalTopK }}</span>
+              </div>
+              <input type="range" [(ngModel)]="settings.retrievalTopK" min="1" max="12" step="1" />
+            </div>
+
+            <div class="form-group">
+              <div class="label-row">
+                <label>Similarity Cutoff Score</label>
+                <span class="mono-val">{{ settings.similarityCutoff }}</span>
+              </div>
+              <input type="range" [(ngModel)]="settings.similarityCutoff" min="0.5" max="0.95" step="0.02" />
+            </div>
+          </div>
+
+          <div class="form-group checkbox-group">
+            <label class="toggle-wrap">
+              <input type="checkbox" [(ngModel)]="settings.rerankerEnabled" />
+              <span class="toggle-label">Enable Cross-Encoder Reranking</span>
+            </label>
+            <span class="field-hint">Passes top vector candidates through a reranker to optimize ranking order before LLM synthesis.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- System Prompt -->
+      <section class="config-card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="card-title">System Grounding Prompt</h3>
+            <p class="card-desc">Instructs the model on citation formatting and boundary rules</p>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="form-group">
+            <textarea [(ngModel)]="settings.systemPrompt" rows="4"></textarea>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Right Column: Authentication Architecture & Integration Readiness -->
+    <div class="settings-col">
+      <section class="config-card highlight-card">
+        <div class="card-header">
+          <div class="card-icon icon-auth">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="card-title">Authentication & Identity Skeleton</h3>
+            <p class="card-desc">Modular auth architecture ready for enterprise integration</p>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="auth-status-box">
+            <div class="status-indicator">
+              <span class="status-bulb" [class.enforced]="authService.isAuthRequired()"></span>
+              <div class="status-texts">
+                <strong>Status: {{ authService.isAuthRequired() ? 'Enforced (Route Guards Active)' : 'Optional / Guest Mode Active' }}</strong>
+                <span class="status-sub">
+                  {{ authService.isAuthRequired()
+                    ? 'Unauthenticated requests will redirect to /login.'
+                    : 'Currently allowing open workspace access for rapid development.' }}
+                </span>
+              </div>
+            </div>
+
+            <button class="btn-toggle-auth" (click)="toggleAuthEnforcement()">
+              {{ authService.isAuthRequired() ? 'Disable Strict Auth' : 'Enforce Auth Guard' }}
+            </button>
+          </div>
+
+          <!-- Active User Mock Info -->
+          <div class="current-user-box" *ngIf="authService.currentUser() as user">
+            <div class="user-meta-row">
+              <span class="user-chip">Active Identity: {{ user.name }} ({{ user.role }})</span>
+              <span class="tenant-chip">Org: {{ user.organization }}</span>
+            </div>
+            <div class="token-preview">
+              <span class="token-label">Bearer Token Attached:</span>
+              <code>{{ user.token }}</code>
+            </div>
+
+            <div class="user-actions">
+              <button class="btn-sm btn-outline" (click)="simulateLogout()">Simulate Logout</button>
+            </div>
+          </div>
+
+          <div class="current-user-box empty-user" *ngIf="!authService.currentUser()">
+            <div class="empty-user-text">No active session (Logged out)</div>
+            <button class="btn-sm btn-primary" (click)="simulateLogin()">Simulate Login (Alex Morgan)</button>
+          </div>
+
+          <!-- Backend Auth Integration Config Fields -->
+          <div class="backend-config-section">
+            <h4 class="section-heading">Backend Provider Wiring</h4>
+            <div class="form-group">
+              <label>Auth Provider Type</label>
+              <select [(ngModel)]="authProviderType">
+                <option value="jwt">Custom JWT / FastApi / Node Backend</option>
+                <option value="oauth2">OAuth2 / OIDC (Keycloak / Okta / Auth0)</option>
+                <option value="firebase">Firebase / Supabase Auth</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Auth Service Endpoint</label>
+              <input type="text" [(ngModel)]="authEndpoint" />
+            </div>
+
+            <div class="form-group">
+              <label>Client ID / App Scope</label>
+              <input type="text" [(ngModel)]="authClientId" />
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>

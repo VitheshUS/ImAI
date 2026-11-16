@@ -1,0 +1,368 @@
+:host {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.chat-page {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.chat-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 28px 38px 16px;
+}
+.chat-toolbar h1 {
+  font-size: 13px;
+  font-weight: 400;
+  margin-top: 7px;
+  color: #9caea4;
+}
+.eyebrow {
+  font-size: 8px;
+}
+.messages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 30px;
+}
+.welcome {
+  max-width: 720px;
+  margin: 35px auto 30px;
+  text-align: center;
+}
+.orb {
+  height: 93px;
+  width: 93px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 26px;
+  border: 1px solid #395e4b;
+  border-radius: 26px;
+  transform: rotate(-8deg);
+  background: linear-gradient(140deg, #263d30, #14231e);
+  box-shadow:
+    0 0 60px #7aebad0b,
+    inset 0 0 22px #85ecb10b;
+  position: relative;
+}
+.orb:before {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border: 1px solid #29433770;
+  border-radius: 32px;
+}
+.orb > span {
+  font-size: 65px;
+  color: #b6f3cb;
+  transform: rotate(8deg);
+  line-height: 1;
+}
+.orb-point {
+  width: 8px;
+  height: 8px;
+  background: #b0f4ca;
+  border: 3px solid #15221c;
+  box-sizing: content-box;
+  border-radius: 50%;
+  position: absolute;
+  right: -7px;
+  top: 14px;
+}
+.welcome > .eyebrow {
+  color: #8eb49c;
+  letter-spacing: 2px;
+}
+.welcome h2 {
+  font-size: clamp(30px, 3.4vw, 48px);
+  font-weight: 450;
+  letter-spacing: -2px;
+  line-height: 1.22;
+  margin: 17px 0;
+}
+.welcome h2 span {
+  color: #95b8a3;
+}
+.welcome > p {
+  font-size: 12px;
+  color: #7e9387;
+  line-height: 1.9;
+}
+.suggestions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 32px auto 0;
+  max-width: 640px;
+  text-align: left;
+}
+.suggestions button {
+  position: relative;
+  text-align: left;
+  padding: 17px 28px 17px 45px;
+  border: 1px solid #2b3931;
+  border-radius: 8px;
+  background: #17211b66;
+  transition: 0.2s;
+}
+.suggestions button:hover {
+  background: #203429;
+  border-color: #628a70;
+  transform: translateY(-2px);
+}
+.suggestion-icon {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  color: #94bda0;
+  font-size: 20px;
+}
+.suggestions strong {
+  display: block;
+  color: #c4d5c8;
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+.suggestions button > span:not(.suggestion-icon) {
+  display: block;
+  font-size: 10px;
+  color: #778e7f;
+  line-height: 1.6;
+}
+.suggestions b {
+  position: absolute;
+  right: 12px;
+  top: 15px;
+  color: #687f70;
+  font-weight: 400;
+}
+.composer-area {
+  width: min(790px, 100%);
+  margin: 0 auto;
+  padding: 16px 25px 17px;
+}
+.context-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 3px 12px;
+}
+.context-row > span {
+  font: 8px var(--font-mono);
+  letter-spacing: 1px;
+  color: #8ca793;
+}
+.context-row select {
+  border: 0;
+  background: transparent;
+  font-size: 10px;
+  color: #a2b6a8;
+  padding: 3px;
+  max-width: 200px;
+}
+.composer {
+  border: 1px solid #405247;
+  border-radius: 10px;
+  background: #18211c;
+  box-shadow: 0 8px 35px #0002;
+}
+.composer:focus-within {
+  border-color: #83b998;
+}
+.composer textarea {
+  width: 100%;
+  resize: none;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 19px 20px 5px;
+  font-size: 12px;
+  min-height: 70px;
+}
+.composer textarea::placeholder {
+  color: #819388;
+}
+.composer-actions {
+  padding: 9px 12px 12px 17px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.composer-actions a {
+  font-size: 19px;
+  color: #abc2b0;
+}
+.composer-actions a span {
+  font-size: 10px;
+  color: #8c9f91;
+  margin-left: 5px;
+}
+.composer-actions > div {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.composer-actions small {
+  font-size: 8px;
+  color: #6c8273;
+}
+.composer-actions small span {
+  padding: 0 5px;
+}
+.composer-actions button {
+  height: 32px;
+  width: 34px;
+  background: #b9f0cc;
+  border-radius: 6px;
+  font-size: 23px;
+  color: #1a3826;
+}
+.composer-actions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.composer-hint {
+  text-align: center;
+  font-size: 8px;
+  color: #718879;
+  margin-top: 12px;
+}
+.message-list {
+  max-width: 770px;
+  margin: 25px auto;
+}
+.message-list article {
+  display: flex;
+  gap: 14px;
+  margin: 25px 0 35px;
+}
+.message-avatar {
+  width: 32px;
+  height: 32px;
+  background: #284432;
+  color: #b5edc6;
+  border: 1px solid #3e5a47;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.user .message-avatar {
+  background: #222e2a;
+  color: #94ab9c;
+}
+.message-body {
+  flex: 1;
+  min-width: 0;
+}
+.message-meta {
+  font-size: 12px;
+  margin: 5px 0 12px;
+}
+.message-meta small {
+  color: #6e8477;
+  font-size: 9px;
+  margin-left: 12px;
+}
+.message-meta > span {
+  font: 7px var(--font-mono);
+  color: #87ac92;
+  margin-left: 15px;
+}
+.message-text {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.9;
+  color: #acbfb1;
+  overflow-wrap: anywhere;
+}
+.citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.citations button {
+  background: #1d2d22;
+  border: 1px solid #3a4d3f;
+  border-radius: 5px;
+  padding: 7px 9px;
+  color: #99b9a2;
+  font-size: 9px;
+  text-align: left;
+}
+.citations span {
+  color: #d0f1d9;
+  margin-right: 8px;
+}
+.generating {
+  font-size: 11px;
+  color: #92b29b;
+  padding: 15px;
+}
+.generating .status-dot {
+  animation: pulseGlow 1s infinite;
+}
+@media (min-height: 950px) {
+  .welcome {
+    margin-top: 85px;
+  }
+  .suggestions {
+    margin-top: 45px;
+  }
+}
+@media (max-width: 760px) {
+  .chat-toolbar {
+    padding: 22px 20px;
+  }
+  .chat-toolbar > .pill {
+    display: none;
+  }
+  .messages {
+    padding: 0 17px;
+  }
+  .welcome {
+    margin-top: 25px;
+  }
+  .welcome h2 {
+    letter-spacing: -1px;
+  }
+  .orb {
+    width: 70px;
+    height: 70px;
+  }
+  .orb > span {
+    font-size: 50px;
+  }
+  .suggestions {
+    gap: 8px;
+    margin-top: 25px;
+  }
+  .suggestions button {
+    padding: 14px 20px 14px 30px;
+  }
+  .suggestion-icon {
+    left: 8px;
+    font-size: 16px;
+  }
+  .composer-area {
+    padding: 12px 15px;
+  }
+  .composer-actions small {
+    display: none;
+  }
+}
+@media (max-width: 400px) {
+  .suggestions {
+    grid-template-columns: 1fr;
+  }
+  .welcome h2 {
+    font-size: 29px;
+  }
+}

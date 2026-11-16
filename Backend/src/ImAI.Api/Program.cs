@@ -1,0 +1,16 @@
+using ImAI.Api;
+using ImAI.Api.Endpoints;
+using ImAI.Application;
+using ImAI.Infrastructure;
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddApplication().AddInfrastructure().AddApi(builder.Configuration);
+var app = builder.Build();
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+app.UseCors("Frontend");
+if (app.Environment.IsDevelopment()) app.MapOpenApi();
+app.MapChatEndpoints();
+app.MapDocumentEndpoints();
+app.MapGet("/health", () => Results.Ok(new { status = "ok", mode = "phase-2-stub" })).WithTags("Health");
+app.Run();
+public partial class Program;
