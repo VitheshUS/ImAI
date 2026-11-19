@@ -13,3 +13,9 @@ POST {{ImAI}}/api/chat
 Content-Type: application/json
 
 {"query":""}
+
+### Azure AI chat (raw text response)
+POST {{ImAI}}/api/ai/chat
+Content-Type: application/json
+
+{"query":"Explain retrieval augmented generation in detail."}
