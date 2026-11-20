@@ -2,7 +2,6 @@
 using System.Net.Http.Json;
 using System.Text;
 using ImAI.Application.Abstractions;
-using ImAI.Application.Chat;
 using ImAI.Domain.Documents;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -17,34 +16,9 @@ public sealed class EndpointTests : IClassFixture<WebApplicationFactory<Program>
     public EndpointTests(WebApplicationFactory<Program> factory) => client = factory.CreateClient();
 
     [Fact]
-    public async Task ChatReturnsDummyResponseAndPreservesConversation()
-    {
-        var id = Guid.NewGuid();
-        var response = await client.PostAsJsonAsync("/api/chat", new { query = "Explain RAG", conversationId = id });
-        response.EnsureSuccessStatusCode();
-        var reply = await response.Content.ReadFromJsonAsync<ChatReply>();
-        Assert.NotNull(reply);
-        Assert.Equal(id, reply.ConversationId);
-        Assert.True(reply.IsSimulated);
-        Assert.Contains("Explain RAG", reply.Answer);
-        Assert.Empty(reply.Sources);
-    }
-
-    [Theory]
-    [InlineData(" ")]
-    [InlineData(null)]
-    public async Task InvalidQueryReturnsProblemDetails(string? query)
-    {
-        var response = await client.PostAsJsonAsync("/api/chat", new { query });
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        Assert.Contains("traceId", await response.Content.ReadAsStringAsync());
-    }
-
-    [Fact]
     public async Task MalformedJsonReturnsProblemDetails()
     {
-        var response = await client.PostAsync("/api/chat", new StringContent("{broken", Encoding.UTF8, "application/json"));
+        var response = await client.PostAsync("/api/ai/chat", new StringContent("{broken", Encoding.UTF8, "application/json"));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
@@ -84,18 +58,18 @@ public sealed class EndpointTests : IClassFixture<WebApplicationFactory<Program>
         await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             builder.UseEnvironment("Production").ConfigureServices(services =>
             {
-                services.RemoveAll<IChatResponder>();
-                services.AddScoped<IChatResponder, ThrowingResponder>();
+                services.RemoveAll<IAzureChatService>();
+                services.AddScoped<IAzureChatService, ThrowingResponder>();
             }));
         using var failingClient = factory.CreateClient();
-        var response = await failingClient.PostAsJsonAsync("/api/chat", new { query = "hello" });
+        var response = await failingClient.PostAsJsonAsync("/api/ai/chat", new { query = "hello" });
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("secret-internal-detail", body);
         Assert.Contains("traceId", body);
     }
-    private sealed class ThrowingResponder : IChatResponder
+    private sealed class ThrowingResponder : IAzureChatService
     {
-        public Task<string> RespondAsync(string query, CancellationToken cancellationToken) => throw new InvalidOperationException("secret-internal-detail");
+        public Task<string> AskAsync(string query, CancellationToken cancellationToken = default) => throw new InvalidOperationException("secret-internal-detail");
     }
 }

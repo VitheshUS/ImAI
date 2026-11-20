@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace ImAI.Api.Tests;
 
-public sealed class AiControllerTests
+public sealed class AiEndpointsTests
 {
     private static WebApplicationFactory<Program> CreateFactory(IAzureChatService service) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services =>
@@ -29,6 +29,14 @@ public sealed class AiControllerTests
         Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
         Assert.Equal("Raw answer\nwith a second line.", await response.Content.ReadAsStringAsync());
         Assert.Equal(query, service.Question);
+    }
+
+    [Fact]
+    public async Task RemovedDummyChatRouteReturns404()
+    {
+        await using var factory = CreateFactory(new FakeAzureChatService());
+        using var client = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/api/chat", new { query = "hello" })).StatusCode);
     }
 
     [Theory]

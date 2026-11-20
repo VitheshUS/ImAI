@@ -1,4 +1,6 @@
-﻿# ImAI monorepo
+# ImAI
+
+ImAI is a retrieval-augmented generation (RAG) application. Its frontend and backend are stored together in this repository.
 
 - `Frontend/`: Angular application. See [frontend instructions](Frontend/README.md).
 - `Backend/`: .NET 10 API solution. See [backend instructions](Backend/README.md).
@@ -18,4 +20,4 @@ Backend TRX test results are retained as workflow artifacts for 14 days, includi
 
 Pushes to `main` run these checks after the push. To require passing checks before changes reach `main`, configure a GitHub ruleset requiring pull requests and both job checks.
 
-For a newly created GitHub monorepo, commit the root `.github/` directory alongside `Frontend/` and `Backend/`. The workflow becomes active once it is pushed to GitHub with Actions enabled.
+Keep the root `.github/` directory alongside `Frontend/` and `Backend/` in the ImAI repository. The workflow becomes active once it is pushed to GitHub with Actions enabled.
