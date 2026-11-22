@@ -1,4 +1,4 @@
-namespace ImAI.Api.Sessions;
+namespace ImAI.Api.Configuration;
 
 public sealed class BrowserOrigins
 {

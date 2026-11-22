@@ -1,10 +1,11 @@
+using ImAI.Api.Cookies;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using ImAI.Application.Abstractions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
-namespace ImAI.Api.Sessions;
+namespace ImAI.Api.Authentication;
 
 public sealed class SessionAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder,

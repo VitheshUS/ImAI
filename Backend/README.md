@@ -45,7 +45,7 @@ Use the same site and scheme for frontend and API with SameSite=Lax cookies; dif
 
 Tokens use 32 cryptographically random bytes encoded as hexadecimal; only their SHA-256 hash is stored. The token is delivered only through `Set-Cookie`: `__Host-ImAI.Session`, `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no Domain, seven-day UTC expiry. Service and HTTP responses contain only session metadata. `ISessionTokenWriter` keeps HTTP cookie handling outside Infrastructure.
 
-Authentication validates cookies against SQLite on incoming requests, sets `HttpContext.User` (`ClaimTypes.NameIdentifier`), and exposes `HttpContext.GetCurrentSession()` from `ImAI.Api.Sessions`. Missing, invalid, or expired sessions get 401 on protected routes. Validation does not extend expiry. Refresh atomically replaces the hash and renews expiry for seven days; only one concurrent refresh succeeds.
+Authentication validates cookies against SQLite on incoming requests, sets `HttpContext.User` (`ClaimTypes.NameIdentifier`), and exposes `HttpContext.GetCurrentSession()` from `ImAI.Api.Extensions`. Missing, invalid, or expired sessions get 401 on protected routes. Validation does not extend expiry. Refresh atomically replaces the hash and renews expiry for seven days; only one concurrent refresh succeeds.
 
 Rejected requests do not clear cookies: a stale concurrent request must not delete the replacement cookie from a successful refresh. Browser expiry removes expired cookies, and creating a session replaces invalid ones. Session responses and authentication failures are marked `no-store`. Unsafe browser requests from untrusted origins are rejected, including multipart submissions.
 
@@ -74,3 +74,14 @@ dotnet format ImAI.slnx style --verify-no-changes --severity warn
 ```
 
 Tests cover HTTP contracts, input validation, long queries, cookie security, hash-only storage, expiry, rotation races, missing/invalid sessions, origin validation, global errors, cancellations, client registration, SQLite migrations, and relational foreign keys. Tests use fake chat services and isolated SQLite databases; they do not call Azure.
+
+## API folder organization
+
+- `Middleware/`: request-origin middleware and global exception handler.
+- `Authentication/`: anonymous-session authentication handler.
+- `Cookies/`: secure session cookie helper.
+- `Configuration/`: browser-origin configuration and matching policy.
+- `Extensions/`: HttpContext current-session extension.
+- `Endpoints/`: Minimal API route definitions.
+
+Each folder has a matching namespace. API DI registration remains in the API project's root `DependencyInjection.cs`.

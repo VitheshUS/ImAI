@@ -1,5 +1,5 @@
 ﻿using ImAI.Api.Middleware;
-using ImAI.Api.Sessions;
+using ImAI.Api.Configuration;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;

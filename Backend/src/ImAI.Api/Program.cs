@@ -1,5 +1,5 @@
 using ImAI.Api;
-using ImAI.Api.Sessions;
+using ImAI.Api.Middleware;
 using ImAI.Api.Endpoints;
 using ImAI.Application;
 using ImAI.Infrastructure;

@@ -1,4 +1,6 @@
-namespace ImAI.Api.Sessions;
+using ImAI.Api.Configuration;
+
+namespace ImAI.Api.Middleware;
 
 // Protect cookie-authenticated POSTs (including multipart uploads) from cross-origin form submissions.
 public sealed class SessionOriginMiddleware(RequestDelegate next, BrowserOrigins origins)

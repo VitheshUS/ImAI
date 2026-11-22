@@ -1,4 +1,5 @@
-using ImAI.Api.Sessions;
+using ImAI.Api.Cookies;
+using ImAI.Api.Extensions;
 using ImAI.Application.Abstractions;
 using ImAI.Application.Sessions;
 

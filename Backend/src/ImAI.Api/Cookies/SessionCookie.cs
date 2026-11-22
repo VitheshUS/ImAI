@@ -1,6 +1,6 @@
 using ImAI.Application.Abstractions;
 
-namespace ImAI.Api.Sessions;
+namespace ImAI.Api.Cookies;
 
 public sealed class SessionCookie(IHttpContextAccessor accessor) : ISessionTokenWriter
 {

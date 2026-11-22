@@ -1,5 +1,7 @@
 using ImAI.Api.Middleware;
-using ImAI.Api.Sessions;
+using ImAI.Api.Authentication;
+using ImAI.Api.Configuration;
+using ImAI.Api.Cookies;
 using ImAI.Application.Abstractions;
 using ImAI.Application.Documents;
 using Microsoft.AspNetCore.Authentication;

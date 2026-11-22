@@ -1,6 +1,6 @@
 using ImAI.Application.Sessions;
 
-namespace ImAI.Api.Sessions;
+namespace ImAI.Api.Extensions;
 
 public static class CurrentSessionExtensions
 {
