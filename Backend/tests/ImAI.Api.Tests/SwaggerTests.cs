@@ -21,6 +21,9 @@ public sealed class SwaggerTests
         var paths = document.RootElement.GetProperty("paths");
         Assert.True(paths.GetProperty("/api/ai/chat").TryGetProperty("post", out _));
         Assert.False(paths.TryGetProperty("/api/chat", out _));
+        Assert.True(paths.GetProperty("/api/sessions").TryGetProperty("post", out _));
+        Assert.True(paths.GetProperty("/api/sessions/validate").TryGetProperty("post", out _));
+        Assert.True(paths.GetProperty("/api/sessions/refresh").TryGetProperty("post", out _));
         Assert.True(paths.GetProperty("/api/documents").TryGetProperty("post", out _));
     }
 

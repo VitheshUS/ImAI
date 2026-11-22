@@ -1,5 +1,9 @@
 using ImAI.Application.Abstractions;
 using ImAI.Infrastructure.Chat;
+using ImAI.Infrastructure.Persistence;
+using ImAI.Infrastructure.Sessions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ImAI.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
@@ -9,6 +13,10 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddDbContext<ImAiDbContext>(options => options.UseSqlite(
+            configuration.GetConnectionString("ImAI") ?? SqliteDatabase.DefaultConnectionString));
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddScoped<IAnonymousSessionService, AnonymousSessionService>();
         services.AddScoped<IAzureChatService>(_ =>
         {
             var endpoint = configuration["AzureOpenAI:Endpoint"];

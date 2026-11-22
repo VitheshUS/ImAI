@@ -13,7 +13,7 @@ namespace ImAI.Api.Tests;
 public sealed class EndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly HttpClient client;
-    public EndpointTests(WebApplicationFactory<Program> factory) => client = factory.CreateClient();
+    public EndpointTests(WebApplicationFactory<Program> factory) => client = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services => services.AddTestAuthentication())).CreateClient();
 
     [Fact]
     public async Task MalformedJsonReturnsProblemDetails()
@@ -58,6 +58,7 @@ public sealed class EndpointTests : IClassFixture<WebApplicationFactory<Program>
         await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             builder.UseEnvironment("Production").ConfigureServices(services =>
             {
+                services.AddTestAuthentication();
                 services.RemoveAll<IAzureChatService>();
                 services.AddScoped<IAzureChatService, ThrowingResponder>();
             }));

@@ -45,7 +45,7 @@ The storage stub consumes the file stream and discards bytes. No blob URL is fab
 
 ## Configuration
 
-CORS defaults to `http://localhost:4200`. Override `Cors:AllowedOrigins` in configuration (for example, environment variable `Cors__AllowedOrigins__0`). All endpoints are currently anonymous. Multipart antiforgery validation is disabled because no cookie-based identity is used; revisit it when adding authentication. Configure Azure credentials through user secrets or environment configuration in the storage integration phase.
+CORS defaults to `http://localhost:4200`. Override `Cors:AllowedOrigins` in configuration (for example, environment variable `Cors__AllowedOrigins__0`). Chat, upload, session validation, and refresh require a valid anonymous-session cookie. Creation, Swagger, and health remain public. Origin checks protect POST requests, including multipart uploads. Configure Azure credentials through user secrets or environment configuration in the storage integration phase.
 
 ## Tests
 
@@ -66,3 +66,27 @@ In Development, open `/swagger` to explore and call the Minimal API endpoints. S
 `POST /api/ai/chat` accepts `{ "query": "Your question", "conversationId": "5d15c0eb-1988-40da-b4df-b67a435f1c94" }`. Omit `conversationId` (or send `null`) for a new conversation. A supplied ID must be a non-empty UUID.
 
 The JSON response contains `conversationId`, a new UUID `messageId` for this reply, `result` with the AI answer text, and `source` as an array. `source` is currently empty because document retrieval is not connected. Reuse the returned conversation ID in subsequent requests to correlate replies. IDs do not yet enable stored conversation history or multi-turn model context.
+
+## Anonymous sessions
+
+Session endpoints persist to SQLite using Infrastructure's `IAnonymousSessionService` registration. The default database is `Backend/imai.db` in this checkout. Override it with `ConnectionStrings:ImAI` in application configuration or `ConnectionStrings__ImAI` in the environment, for example `Data Source=C:\data\imai.db`. The EF design-time factory also accepts this environment variable. When no solution directory is available (a published build), the default database is next to the application binaries.
+
+For a fresh database, apply the existing migration before using sessions:
+
+```sh
+dotnet ef database update --project src/ImAI.Infrastructure --startup-project src/ImAI.Infrastructure
+```
+
+| Method | Route | Request | Success |
+| --- | --- | --- | --- |
+| POST | `/api/sessions` | No body | `sessionId`, `expiresAt`; sets session cookie |
+| POST | `/api/sessions/validate` | Cookie, no body | `sessionId`, `expiresAt` |
+| POST | `/api/sessions/refresh` | Cookie, no body | `sessionId`, `expiresAt`; rotates session cookie |
+
+The token is sent only in the `Set-Cookie` response header as `__Host-ImAI.Session`, with `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no Domain attribute, and a seven-day expiry. It is never included in the JSON response. Only its SHA-256 hash is stored. Validation does not extend expiry; refresh rotates the token and renews expiry for seven days. Old and expired cookies return 401 on protected routes. Invalid cookies are cleared.
+
+Authentication runs on incoming requests, validates the cookie against SQLite, sets `HttpContext.User` with the session ID in `ClaimTypes.NameIdentifier`, and makes session metadata available through `HttpContext.GetCurrentSession()` (import `ImAI.Api.Sessions`). `IHttpContextAccessor` is registered for scoped consumers. This is anonymous session identity, not a verified user account. Conversation ownership checks are not implemented yet.
+
+Use HTTPS for the API and browser frontend. Run `dotnet run --project src/ImAI.Api --launch-profile https` and open `https://localhost:7106/swagger`. Trust the local development certificate if needed with `dotnet dev-certs https --trust`. Secure cookies are not downgraded for HTTP. The frontend must use `credentials: 'include'` in fetch, or `withCredentials: true` in Angular HttpClient. Cookies automatically accompany matching paths on the API host; JavaScript cannot read the token. Keep frontend and API on the same site and scheme for SameSite=Lax; different localhost ports are supported over HTTPS.
+
+Credentialed CORS permits the configured `Cors:AllowedOrigins` (defaults: `http://localhost:4200` and `https://localhost:4200`). The API rejects POST requests from untrusted browser origins. HTTP clients without browser origin headers can authenticate with the cookie normally.

@@ -20,7 +20,7 @@ public static class AiEndpoints
             return Results.Ok(new AiChatResponse(
                 request.ConversationId ?? Guid.NewGuid(), Guid.NewGuid(), response, []));
         })
-        .WithName("AskAi").WithTags("AI")
+        .RequireAuthorization().Produces(401).WithName("AskAi").WithTags("AI")
         .Accepts<AiChatRequest>("application/json")
         .Produces<AiChatResponse>(StatusCodes.Status200OK)
         .ProducesProblem(StatusCodes.Status400BadRequest)

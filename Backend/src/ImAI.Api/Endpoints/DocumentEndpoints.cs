@@ -12,8 +12,8 @@ public static class DocumentEndpoints
             await using var stream = file.OpenReadStream();
             return Results.Ok(await sender.Send(new ReceiveDocument(stream, file.FileName, file.ContentType, file.Length), cancellationToken));
         })
-        // No cookie authentication in this phase. Revisit before adding cookie-based identity.
-        .DisableAntiforgery().WithName("ReceiveDocument").WithTags("Documents")
+        // Origin validation middleware protects multipart cookie requests from cross-origin submissions.
+        .DisableAntiforgery().RequireAuthorization().Produces(401).WithName("ReceiveDocument").WithTags("Documents")
         .Accepts<IFormFile>("multipart/form-data").Produces<DocumentReceipt>()
         .ProducesProblem(400).ProducesProblem(413).ProducesProblem(500);
         return endpoints;

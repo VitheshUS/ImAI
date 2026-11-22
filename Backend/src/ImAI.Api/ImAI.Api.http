@@ -1,21 +1,25 @@
-﻿@ImAI = http://localhost:5100
+﻿@ImAI = https://localhost:7106
 
-GET {{ImAI}}/health
+### Create anonymous session first; enable your HTTP client's cookie jar
+POST {{ImAI}}/api/sessions
 
-### AI chat
+### Validate current cookie (no body/token in JSON)
+POST {{ImAI}}/api/sessions/validate
+
+### Refresh cookie; save the updated Set-Cookie automatically
+POST {{ImAI}}/api/sessions/refresh
+
+### AI chat; the cookie jar attaches the session cookie
 POST {{ImAI}}/api/ai/chat
 Content-Type: application/json
 
 {"query":"How does retrieval work?"}
 
-### Invalid input -> Problem Details
+### Existing conversation
 POST {{ImAI}}/api/ai/chat
 Content-Type: application/json
 
-{"query":""}
+{"query":"Explain more.","conversationId":"5d15c0eb-1988-40da-b4df-b67a435f1c94"}
 
-### Azure AI chat (structured response)
-POST {{ImAI}}/api/ai/chat
-Content-Type: application/json
-
-{"query":"Explain retrieval augmented generation in detail.","conversationId":"5d15c0eb-1988-40da-b4df-b67a435f1c94"}
+### Health (public)
+GET {{ImAI}}/health

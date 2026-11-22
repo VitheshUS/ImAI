@@ -1,4 +1,5 @@
 using ImAI.Api;
+using ImAI.Api.Sessions;
 using ImAI.Api.Endpoints;
 using ImAI.Application;
 using ImAI.Infrastructure;
@@ -8,6 +9,9 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseCors("Frontend");
+app.UseMiddleware<SessionOriginMiddleware>();
+app.UseAuthentication();
+app.UseAuthorization();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -17,6 +21,7 @@ if (app.Environment.IsDevelopment())
         options.DocumentTitle = "ImAI API ? Swagger";
     });
 }
+app.MapSessionEndpoints();
 app.MapAiEndpoints();
 app.MapDocumentEndpoints();
 app.MapGet("/health", () => Results.Ok(new { status = "ok", mode = "phase-2-stub" })).WithTags("Health");

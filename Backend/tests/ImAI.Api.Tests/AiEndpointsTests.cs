@@ -15,6 +15,7 @@ public sealed class AiEndpointsTests
     private static WebApplicationFactory<Program> CreateFactory(IAzureChatService service) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder.ConfigureServices(services =>
         {
+            services.AddTestAuthentication();
             services.RemoveAll<IAzureChatService>();
             services.AddSingleton(service);
         }));
