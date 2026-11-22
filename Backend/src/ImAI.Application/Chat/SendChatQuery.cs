@@ -1,17 +1,21 @@
 using ImAI.Application.Abstractions;
 using ImAI.Application.Common;
 using MediatR;
+
 namespace ImAI.Application.Chat;
 
-public sealed record SendChatQuery(string Query, Guid? ConversationId = null) : IRequest<ChatReply>;
-public sealed record ChatReply(Guid ConversationId, string Answer, bool IsSimulated, string[] Sources);
-public sealed class SendChatQueryHandler(IChatResponder responder) : IRequestHandler<SendChatQuery, ChatReply>
+public sealed record SendChatQuery(string Query, Guid? ConversationId = null) : IRequest<AiChatResponse>;
+
+public sealed class SendChatQueryHandler(IAzureChatService chatService) : IRequestHandler<SendChatQuery, AiChatResponse>
 {
-    public async Task<ChatReply> Handle(SendChatQuery request, CancellationToken cancellationToken)
+    public async Task<AiChatResponse> Handle(SendChatQuery request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Query) || request.Query.Length > 8000)
-            throw new RequestValidationException("Query must contain between 1 and 8000 characters.");
-        var answer = await responder.RespondAsync(request.Query.Trim(), cancellationToken);
-        return new(request.ConversationId ?? Guid.NewGuid(), answer, true, []);
+        if (string.IsNullOrWhiteSpace(request.Query))
+            throw new RequestValidationException("Query is required.");
+        if (request.ConversationId == Guid.Empty)
+            throw new RequestValidationException("ConversationId must be a non-empty UUID when supplied.");
+
+        var result = await chatService.AskAsync(request.Query, cancellationToken);
+        return new(request.ConversationId ?? Guid.NewGuid(), Guid.NewGuid(), result, []);
     }
 }

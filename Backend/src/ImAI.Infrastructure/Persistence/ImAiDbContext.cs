@@ -16,6 +16,7 @@ public sealed class ImAiDbContext(DbContextOptions<ImAiDbContext> options) : DbC
             entity.ToTable("AnonymousSession");
             entity.HasKey(session => session.Id);
             entity.Property(session => session.TokenHash).IsRequired();
+            entity.HasIndex(session => session.TokenHash);
         });
 
         modelBuilder.Entity<Conversation>(entity =>

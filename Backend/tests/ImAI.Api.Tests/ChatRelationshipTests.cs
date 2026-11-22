@@ -17,8 +17,10 @@ public sealed class ChatRelationshipTests
         await context.Database.EnsureCreatedAsync();
         var session = new AnonymousSession
         {
-            Id = Guid.NewGuid(), TokenHash = "test-hash",
-            CreatedAt = DateTime.UtcNow, ExpiresAt = DateTime.UtcNow.AddDays(1)
+            Id = Guid.NewGuid(),
+            TokenHash = "test-hash",
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddDays(1)
         };
         for (var i = 0; i < 2; i++)
         {

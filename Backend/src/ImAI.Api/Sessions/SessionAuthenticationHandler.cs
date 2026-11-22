@@ -13,14 +13,20 @@ public sealed class SessionAuthenticationHandler(
 {
     public const string SchemeName = "AnonymousSession";
 
+    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
+    {
+        Response.Headers.CacheControl = "no-store";
+        return base.HandleChallengeAsync(properties);
+    }
+
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var token = cookie.Read(Context);
+        if (token is not null) Response.Headers.CacheControl = "no-store";
         if (token is null) return AuthenticateResult.NoResult();
         var session = await sessions.ValidateAsync(token, Context.RequestAborted);
         if (session is null)
         {
-            cookie.Clear(Context);
             return AuthenticateResult.Fail("Session is invalid or expired.");
         }
         Context.Features.Set(session);

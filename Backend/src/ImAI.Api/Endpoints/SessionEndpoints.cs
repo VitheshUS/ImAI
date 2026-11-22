@@ -21,19 +21,15 @@ public static class SessionEndpoints
 
         group.MapPost("/validate", (HttpContext context) =>
         {
-            var session = context.GetCurrentSession()!;
-            return Results.Ok(new SessionResponse(session.SessionId, session.ExpiresAt));
+            var session = context.GetCurrentSession()
+                ?? throw new InvalidOperationException("Authenticated session context is missing.");
+            return Results.Ok(session);
         }).RequireAuthorization().WithName("ValidateAnonymousSession").Produces<SessionResponse>().Produces(401);
 
         group.MapPost("/refresh", async (HttpContext context, IAnonymousSessionService sessions, SessionCookie cookie, CancellationToken cancellationToken) =>
         {
             var session = await sessions.RefreshAsync(cookie.Read(context), cancellationToken);
-            if (session is null)
-            {
-                cookie.Clear(context);
-                return Results.Unauthorized();
-            }
-            return Results.Ok(session);
+            return session is null ? Results.Unauthorized() : Results.Ok(session);
         }).RequireAuthorization().WithName("RefreshAnonymousSession").Produces<SessionResponse>().Produces(401);
         return endpoints;
     }

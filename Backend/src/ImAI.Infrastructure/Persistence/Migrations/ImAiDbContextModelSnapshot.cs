@@ -35,6 +35,8 @@ namespace ImAI.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("TokenHash");
+
                     b.ToTable("AnonymousSession", (string)null);
                 });
 
@@ -89,20 +91,34 @@ namespace ImAI.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("ImAI.Domain.Entities.ChatMessage", b =>
                 {
-                    b.HasOne("ImAI.Domain.Entities.Conversation", null)
-                        .WithMany()
+                    b.HasOne("ImAI.Domain.Entities.Conversation", "Conversation")
+                        .WithMany("ChatMessages")
                         .HasForeignKey("ConversationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Conversation");
                 });
 
             modelBuilder.Entity("ImAI.Domain.Entities.Conversation", b =>
                 {
-                    b.HasOne("ImAI.Domain.Entities.AnonymousSession", null)
-                        .WithMany()
+                    b.HasOne("ImAI.Domain.Entities.AnonymousSession", "Session")
+                        .WithMany("Conversations")
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("ImAI.Domain.Entities.AnonymousSession", b =>
+                {
+                    b.Navigation("Conversations");
+                });
+
+            modelBuilder.Entity("ImAI.Domain.Entities.Conversation", b =>
+                {
+                    b.Navigation("ChatMessages");
                 });
 #pragma warning restore 612, 618
         }

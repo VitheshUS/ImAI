@@ -18,12 +18,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("../openapi/v1.json", "ImAI API v1");
-        options.DocumentTitle = "ImAI API ? Swagger";
+        options.DocumentTitle = "ImAI API - Swagger";
     });
 }
 app.MapSessionEndpoints();
 app.MapAiEndpoints();
 app.MapDocumentEndpoints();
-app.MapGet("/health", () => Results.Ok(new { status = "ok", mode = "phase-2-stub" })).WithTags("Health");
+app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithTags("Health");
 app.Run();
 public partial class Program;

@@ -1,92 +1,76 @@
-﻿# ImAI backend — Phase 2
+﻿# ImAI backend
 
-.NET 10 Minimal API using Clean Architecture and MediatR. No database, API user authentication, real document storage, or retrieval is enabled. AI queries call Azure OpenAI. The Azure AI endpoint uses `IAzureChatService` configured through `AzureOpenAI:Endpoint` and `AzureOpenAI:ChatDeployment`, with `DefaultAzureCredential` authentication. The Angular frontend remains on its existing local demo services; connecting it is a separate integration step.
+.NET 10 Minimal API with Clean Architecture, MediatR, Azure OpenAI chat, and SQLite-backed anonymous sessions. Document ingestion remains an explicit stub; file bytes are discarded. Retrieval, stored conversation history, and conversation ownership enforcement are not connected yet.
 
 ## Run
 
-Requires the .NET 10 SDK.
+From `Backend/`:
 
 ```sh
 dotnet restore ImAI.slnx
-dotnet run --project src/ImAI.Api --no-launch-profile --urls http://localhost:5100
+dotnet ef database update --project src/ImAI.Infrastructure --startup-project src/ImAI.Infrastructure
+dotnet run --project src/ImAI.Api --launch-profile https
 ```
 
-Set `ASPNETCORE_ENVIRONMENT=Development` to expose the OpenAPI JSON at `/openapi/v1.json`. The included launch profile also starts Development at `http://localhost:5041` when using `dotnet run --project src/ImAI.Api` without the flags above.
+Open `https://localhost:7106/swagger` in Development. Trust the local certificate with `dotnet dev-certs https --trust` if needed. HTTPS is the default launch profile because session cookies are Secure. The `http` profile remains available for non-cookie checks. OpenAPI JSON is at `/openapi/v1.json`; documentation is not served in Production.
 
-## Endpoint table
+## Endpoints
 
-Minimal API definitions live in `src/ImAI.Api/Endpoints`, separately from `Program.cs` and application handlers.
-
-| Method | Route | Input | Success | Definition |
+| Method | Route | Input | Result | Access |
 | --- | --- | --- | --- | --- |
-| POST | `/api/ai/chat` | JSON: `query`, optional `conversationId` (UUID) | 200: `conversationId`, `messageId`, `result`, `source` array | `AiEndpoints.cs` |
-| POST | `/api/documents` | Multipart form with one `file` field | 200: document receipt with `status: received-not-stored`, `isSimulated: true` | `DocumentEndpoints.cs` |
-| GET | `/health` | None | 200: health and phase-2-stub mode | `Program.cs` |
+| POST | `/api/sessions` | No body | `sessionId`, `expiresAt`; sets cookie | Public |
+| POST | `/api/sessions/validate` | Cookie, no body | `sessionId`, `expiresAt` | Session |
+| POST | `/api/sessions/refresh` | Cookie, no body | `sessionId`, `expiresAt`; rotates cookie | Session |
+| POST | `/api/ai/chat` | JSON: `query`, optional UUID `conversationId` | `conversationId`, `messageId`, `result`, `source` array | Session |
+| POST | `/api/documents` | Multipart `file` | Simulated document receipt, `received-not-stored` | Session |
+| GET | `/health` | None | `status: ok` (process liveness) | Public |
 
-```sh
-curl -X POST http://localhost:5100/api/ai/chat -H "Content-Type: application/json" -d '{"query":"Explain RAG"}'
-curl -X POST http://localhost:5100/api/documents -F "file=@notes.pdf"
-```
+Create a session before calling protected endpoints. Browser clients attach the cookie automatically; use `withCredentials: true` in Angular HttpClient or `credentials: 'include'` in fetch. Swagger's same-origin requests also use the cookie. HTTP examples are in `src/ImAI.Api/ImAI.Api.http`.
 
-On Windows PowerShell, use `curl.exe` for multipart requests. Chat examples are also in `src/ImAI.Api/ImAI.Api.http`.
+Queries must contain non-whitespace text. Omitting or sending null `conversationId` generates a new UUID; a supplied ID must not be empty. Every reply gets a new message UUID. IDs currently correlate requests only, and do not provide stored multi-turn context. `source` remains empty until retrieval is integrated.
 
-Queries must contain non-whitespace text and are sent in the JSON body, subject to the server request size limit. Files must be non-empty, at most 50 MiB, and have a PDF, DOCX, Markdown, TXT, CSV, or JSON extension. File extension checks are preliminary validation, not content inspection. Kestrel caps the entire request at 51 MiB to allow multipart overhead. Invalid input returns Problem Details (400); oversized requests can return 413. Unsupported content types can return 415. Unexpected exceptions return a generic 500 with a trace ID and are logged server-side.
-
-## Architecture and DI
-
-- `ImAI.Domain`: dependency-free document receipt model. No runtime services to register.
-- `ImAI.Application`: commands, MediatR handlers, input validation, storage and chat interfaces. `AddApplication()` registers MediatR by assembly scanning.
-- `ImAI.Infrastructure`: Azure chat service and stub document storage. `AddInfrastructure(configuration)` registers its own implementations, including `IAzureChatService`. The old dummy responder is retained internally but has no HTTP endpoint.
-- `ImAI.Api`: HTTP binding, separate endpoint classes, OpenAPI, CORS, and global exception handling through ASP.NET Core's exception middleware and `IExceptionHandler`. `AddApi()` owns these registrations.
-
-Dependencies point inward: API → Application + Infrastructure; Infrastructure → Application; Application → Domain. `Program.cs` composes the extension methods and pipeline only.
-
-The storage stub consumes the file stream and discards bytes. No blob URL is fabricated and no document is retained. Replace `IDocumentStorage` with an Azure Blob adapter and update `AddInfrastructure()` when implementing uploads. The AI endpoint resolves `IAzureChatService` and requires valid Azure OpenAI configuration and credentials. Document upload does not require cloud access yet.
+Uploads accept PDF, DOCX, Markdown, TXT, CSV, and JSON extensions. Files must be non-empty and at most 50 MiB. The 51 MiB server request limit includes multipart overhead and derives from the same file-size constant. Extension checks do not inspect document contents.
 
 ## Configuration
 
-CORS defaults to `http://localhost:4200`. Override `Cors:AllowedOrigins` in configuration (for example, environment variable `Cors__AllowedOrigins__0`). Chat, upload, session validation, and refresh require a valid anonymous-session cookie. Creation, Swagger, and health remain public. Origin checks protect POST requests, including multipart uploads. Configure Azure credentials through user secrets or environment configuration in the storage integration phase.
+- `AzureOpenAI:Endpoint`: HTTPS Azure OpenAI resource endpoint.
+- `AzureOpenAI:ChatDeployment`: deployment name. The shared SDK client is created lazily, so cloud configuration is needed only when chat is used.
+- Azure credentials: the current implementation retains `AzureCliCredential`; sign in with Azure CLI for live local calls. Managed identity configuration is a future deployment task.
+- `ConnectionStrings:ImAI`: optional SQLite connection string. Default: `Backend/imai.db` in this checkout, or `imai.db` beside published binaries. `ConnectionStrings__ImAI` overrides both runtime configuration and EF tooling. The design-time factory otherwise uses the default path; it does not load API appsettings files.
+- `Cors:AllowedOrigins`: exact HTTP(S) origins. Defaults: `http://localhost:4200` and `https://localhost:4200`. CORS and POST origin validation share one normalized configuration. Wildcards, credentials, and non-root paths are rejected.
 
-## Tests
+Use the same site and scheme for frontend and API with SameSite=Lax cookies; different HTTPS localhost ports are supported. The frontend currently retains its own demo services and is not connected to this API.
+
+## Session behavior
+
+Tokens use 32 cryptographically random bytes encoded as hexadecimal; only their SHA-256 hash is stored. The token is delivered only through `Set-Cookie`: `__Host-ImAI.Session`, `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no Domain, seven-day UTC expiry. Service and HTTP responses contain only session metadata. `ISessionTokenWriter` keeps HTTP cookie handling outside Infrastructure.
+
+Authentication validates cookies against SQLite on incoming requests, sets `HttpContext.User` (`ClaimTypes.NameIdentifier`), and exposes `HttpContext.GetCurrentSession()` from `ImAI.Api.Sessions`. Missing, invalid, or expired sessions get 401 on protected routes. Validation does not extend expiry. Refresh atomically replaces the hash and renews expiry for seven days; only one concurrent refresh succeeds.
+
+Rejected requests do not clear cookies: a stale concurrent request must not delete the replacement cookie from a successful refresh. Browser expiry removes expired cookies, and creating a session replaces invalid ones. Session responses and authentication failures are marked `no-store`. Unsafe browser requests from untrusted origins are rejected, including multipart submissions.
+
+## Architecture and review decisions
+
+| Area | Implementation and reason | Pattern |
+| --- | --- | --- |
+| API | Endpoint classes bind HTTP input; chat and upload delegate to application handlers | Minimal API, thin transport layer |
+| Application | One real `SendChatQuery` handler replaces the obsolete dummy request/response path; `ReceiveDocument` handles ingestion validation | Mediator / request-handler pattern through MediatR |
+| Infrastructure | Azure, SQLite, session hashing, and storage implement application interfaces | Dependency inversion, adapters |
+| Sessions | One metadata response replaces the redundant always-valid DTO; token writing is a separate port | Interface segregation, adapter pattern |
+| Refresh | Conditional database update includes the original hash and expiry | Optimistic concurrency / compare-and-swap |
+| Azure client | DI owns one thread-safe `IChatClient`; scoped service consumes it | Dependency injection and managed lifetime |
+| Persistence | EF Core maps sessions, conversations, messages, and relationships; token hash is indexed | DbContext unit of work, EF migrations |
+| HTTP policies | Shared normalized origin configuration; centralized Problem Details trace IDs; cancellations avoid false 500 errors | Middleware pipeline, single responsibility |
+
+Removed `DummyChatResponder`, `IChatResponder`, the obsolete `ChatReply` contract, unused `Azure.Search.Documents`, duplicate nullable/implicit-using project settings, and the unused cookie-clear method. Compiler settings are centralized in `Directory.Build.props`. Fixed test-host disposal and updated regression coverage.
+
+Retained the document storage stub because upload is an active endpoint and real blob integration is deferred. Retained Azure Blob and Microsoft.Extensions.AI packages as previously requested integration dependencies. Retained conversation/message models, schema migrations, the EF design-time factory, authentication, origin checks, and the cookie writer: they support current requirements or the explicitly created database schema. A generic repository layer was not added; it would duplicate EF Core without a current need.
+
+## Verification
 
 ```sh
-dotnet test ImAI.slnx
+dotnet test ImAI.slnx --configuration Release
+dotnet format ImAI.slnx style --verify-no-changes --severity warn
 ```
 
-HTTP integration tests use `WebApplicationFactory` and verify structured AI replies using a fake service, long queries, invalid input, malformed JSON, file acceptance/rejection, missing files, the removed dummy chat route, Swagger routes, and safe global exception responses.
-
-Reference: [ASP.NET Core API error handling](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/handle-errors).
-
-## Swagger UI
-
-In Development, open `/swagger` to explore and call the Minimal API endpoints. Swagger UI uses the existing `/openapi/v1.json` document. Launch profiles open Swagger automatically. For example, `dotnet run --project src/ImAI.Api` serves it at `http://localhost:5041/swagger`. Documentation routes are enabled only in Development.
-
-## AI conversation contract
-
-`POST /api/ai/chat` accepts `{ "query": "Your question", "conversationId": "5d15c0eb-1988-40da-b4df-b67a435f1c94" }`. Omit `conversationId` (or send `null`) for a new conversation. A supplied ID must be a non-empty UUID.
-
-The JSON response contains `conversationId`, a new UUID `messageId` for this reply, `result` with the AI answer text, and `source` as an array. `source` is currently empty because document retrieval is not connected. Reuse the returned conversation ID in subsequent requests to correlate replies. IDs do not yet enable stored conversation history or multi-turn model context.
-
-## Anonymous sessions
-
-Session endpoints persist to SQLite using Infrastructure's `IAnonymousSessionService` registration. The default database is `Backend/imai.db` in this checkout. Override it with `ConnectionStrings:ImAI` in application configuration or `ConnectionStrings__ImAI` in the environment, for example `Data Source=C:\data\imai.db`. The EF design-time factory also accepts this environment variable. When no solution directory is available (a published build), the default database is next to the application binaries.
-
-For a fresh database, apply the existing migration before using sessions:
-
-```sh
-dotnet ef database update --project src/ImAI.Infrastructure --startup-project src/ImAI.Infrastructure
-```
-
-| Method | Route | Request | Success |
-| --- | --- | --- | --- |
-| POST | `/api/sessions` | No body | `sessionId`, `expiresAt`; sets session cookie |
-| POST | `/api/sessions/validate` | Cookie, no body | `sessionId`, `expiresAt` |
-| POST | `/api/sessions/refresh` | Cookie, no body | `sessionId`, `expiresAt`; rotates session cookie |
-
-The token is sent only in the `Set-Cookie` response header as `__Host-ImAI.Session`, with `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no Domain attribute, and a seven-day expiry. It is never included in the JSON response. Only its SHA-256 hash is stored. Validation does not extend expiry; refresh rotates the token and renews expiry for seven days. Old and expired cookies return 401 on protected routes. Invalid cookies are cleared.
-
-Authentication runs on incoming requests, validates the cookie against SQLite, sets `HttpContext.User` with the session ID in `ClaimTypes.NameIdentifier`, and makes session metadata available through `HttpContext.GetCurrentSession()` (import `ImAI.Api.Sessions`). `IHttpContextAccessor` is registered for scoped consumers. This is anonymous session identity, not a verified user account. Conversation ownership checks are not implemented yet.
-
-Use HTTPS for the API and browser frontend. Run `dotnet run --project src/ImAI.Api --launch-profile https` and open `https://localhost:7106/swagger`. Trust the local development certificate if needed with `dotnet dev-certs https --trust`. Secure cookies are not downgraded for HTTP. The frontend must use `credentials: 'include'` in fetch, or `withCredentials: true` in Angular HttpClient. Cookies automatically accompany matching paths on the API host; JavaScript cannot read the token. Keep frontend and API on the same site and scheme for SameSite=Lax; different localhost ports are supported over HTTPS.
-
-Credentialed CORS permits the configured `Cors:AllowedOrigins` (defaults: `http://localhost:4200` and `https://localhost:4200`). The API rejects POST requests from untrusted browser origins. HTTP clients without browser origin headers can authenticate with the cookie normally.
+Tests cover HTTP contracts, input validation, long queries, cookie security, hash-only storage, expiry, rotation races, missing/invalid sessions, origin validation, global errors, cancellations, client registration, SQLite migrations, and relational foreign keys. Tests use fake chat services and isolated SQLite databases; they do not call Azure.

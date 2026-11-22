@@ -2,6 +2,7 @@
 using ImAI.Infrastructure;
 using ImAI.Infrastructure.Chat;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ImAI.Api.Tests;
@@ -20,6 +21,8 @@ public sealed class AzureChatRegistrationTests
         using var scope = provider.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<IAzureChatService>();
         Assert.IsType<AzureChatService>(service);
+        using var otherScope = provider.CreateScope();
+        Assert.Same(scope.ServiceProvider.GetRequiredService<IChatClient>(), otherScope.ServiceProvider.GetRequiredService<IChatClient>());
         Assert.Same(service, scope.ServiceProvider.GetRequiredService<IAzureChatService>());
     }
 
@@ -29,7 +32,7 @@ public sealed class AzureChatRegistrationTests
         using var provider = new ServiceCollection()
             .AddInfrastructure(new ConfigurationBuilder().Build()).BuildServiceProvider();
         using var scope = provider.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IChatResponder>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IDocumentStorage>());
         var exception = Assert.Throws<InvalidOperationException>(() =>
             scope.ServiceProvider.GetRequiredService<IAzureChatService>());
         Assert.Contains("AzureOpenAI:Endpoint", exception.Message);

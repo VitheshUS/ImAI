@@ -1,4 +1,7 @@
 using ImAI.Application.Abstractions;
+using Azure.AI.OpenAI;
+using Azure.Identity;
+using Microsoft.Extensions.AI;
 using ImAI.Infrastructure.Chat;
 using ImAI.Infrastructure.Persistence;
 using ImAI.Infrastructure.Sessions;
@@ -17,7 +20,7 @@ public static class DependencyInjection
             configuration.GetConnectionString("ImAI") ?? SqliteDatabase.DefaultConnectionString));
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<IAnonymousSessionService, AnonymousSessionService>();
-        services.AddScoped<IAzureChatService>(_ =>
+        services.AddSingleton<IChatClient>(_ =>
         {
             var endpoint = configuration["AzureOpenAI:Endpoint"];
             var deployment = configuration["AzureOpenAI:ChatDeployment"];
@@ -25,9 +28,9 @@ public static class DependencyInjection
                 throw new InvalidOperationException("Configure AzureOpenAI:Endpoint with a valid HTTPS endpoint.");
             if (string.IsNullOrWhiteSpace(deployment))
                 throw new InvalidOperationException("Configure AzureOpenAI:ChatDeployment with the Azure deployment name.");
-            return new AzureChatService(endpoint!, deployment);
+            return new AzureOpenAIClient(uri, new AzureCliCredential()).GetChatClient(deployment).AsIChatClient();
         });
-        services.AddScoped<IChatResponder, DummyChatResponder>();
+        services.AddScoped<IAzureChatService, AzureChatService>();
         services.AddScoped<IDocumentStorage, StubDocumentStorage>();
         return services;
     }

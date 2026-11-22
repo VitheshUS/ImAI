@@ -91,7 +91,8 @@ public sealed class SessionEndpointsTests
         host.Clock.Advance(TimeSpan.FromDays(7));
         var expired = await client.PostAsync(path, null);
         Assert.Equal(HttpStatusCode.Unauthorized, expired.StatusCode);
-        Assert.Contains("expires=Thu, 01 Jan 1970", expired.Headers.GetValues("Set-Cookie").Single());
+        Assert.False(expired.Headers.Contains("Set-Cookie"));
+        Assert.True(expired.Headers.CacheControl?.NoStore);
     }
 
     [Theory]
@@ -133,7 +134,8 @@ public sealed class SessionEndpointsTests
         SetCookie(client, issued.Token);
         var responses = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => client.PostAsync("/api/sessions/refresh", null)));
         Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
-        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Unauthorized);
+        var rejected = Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Unauthorized);
+        Assert.False(rejected.Headers.Contains("Set-Cookie"));
     }
 
     [Fact]
@@ -195,7 +197,7 @@ public sealed class SessionEndpointsTests
         {
             var client = CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), HandleCookies = false });
             using var scope = Services.CreateScope();
-            scope.ServiceProvider.GetRequiredService<ImAiDbContext>().Database.EnsureCreated();
+            scope.ServiceProvider.GetRequiredService<ImAiDbContext>().Database.Migrate();
             return client;
         }
         protected override void Dispose(bool disposing)

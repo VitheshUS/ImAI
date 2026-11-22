@@ -10,10 +10,16 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace ImAI.Api.Tests;
 
-public sealed class EndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class EndpointTests : IClassFixture<WebApplicationFactory<Program>>, IDisposable
 {
     private readonly HttpClient client;
-    public EndpointTests(WebApplicationFactory<Program> factory) => client = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services => services.AddTestAuthentication())).CreateClient();
+    private readonly WebApplicationFactory<Program> testFactory;
+    public EndpointTests(WebApplicationFactory<Program> factory)
+    {
+        testFactory = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services => services.AddTestAuthentication()));
+        client = testFactory.CreateClient();
+    }
+    public void Dispose() { client.Dispose(); testFactory.Dispose(); }
 
     [Fact]
     public async Task MalformedJsonReturnsProblemDetails()

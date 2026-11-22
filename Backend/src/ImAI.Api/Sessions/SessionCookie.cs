@@ -1,4 +1,3 @@
-using ImAI.Application.Sessions;
 using ImAI.Application.Abstractions;
 
 namespace ImAI.Api.Sessions;
@@ -11,18 +10,11 @@ public sealed class SessionCookie(IHttpContextAccessor accessor) : ISessionToken
         (accessor.HttpContext ?? throw new InvalidOperationException("Session cookie requires an active HTTP request."))
         .Response.Cookies.Append(Name, token, new CookieOptions
         {
-            HttpOnly = true, Secure = true, Path = "/", SameSite = SameSiteMode.Lax,
+            HttpOnly = true,
+            Secure = true,
+            Path = "/",
+            SameSite = SameSiteMode.Lax,
             Expires = new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc)),
             IsEssential = true
         });
-    public void Clear(HttpContext context) => context.Response.Cookies.Delete(Name, new CookieOptions
-    {
-        HttpOnly = true, Secure = true, Path = "/", SameSite = SameSiteMode.Lax
-    });
-}
-
-public static class CurrentSessionExtensions
-{
-    public static SessionValidationResponse? GetCurrentSession(this HttpContext context) =>
-        context.Features.Get<SessionValidationResponse>();
 }

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using ImAI.Application.Abstractions;
 using ImAI.Application.Sessions;
@@ -18,7 +19,10 @@ internal sealed class AnonymousSessionService(ImAiDbContext database, TimeProvid
         var now = clock.GetUtcNow().UtcDateTime;
         var session = new AnonymousSession
         {
-            Id = Guid.NewGuid(), TokenHash = Hash(token), CreatedAt = now, ExpiresAt = now.Add(TokenLifetime)
+            Id = Guid.NewGuid(),
+            TokenHash = Hash(token),
+            CreatedAt = now,
+            ExpiresAt = now.Add(TokenLifetime)
         };
         database.AnonymousSessions.Add(session);
         await database.SaveChangesAsync(cancellationToken);
@@ -26,25 +30,25 @@ internal sealed class AnonymousSessionService(ImAiDbContext database, TimeProvid
         return new(session.Id, session.ExpiresAt);
     }
 
-    public async Task<SessionValidationResponse?> ValidateAsync(string? token, CancellationToken cancellationToken = default)
+    public async Task<SessionResponse?> ValidateAsync(string? token, CancellationToken cancellationToken = default)
     {
         if (!IsTokenFormatValid(token)) return null;
-        var tokenHash = Hash(token!);
+        var tokenHash = Hash(token);
         var now = clock.GetUtcNow().UtcDateTime;
         return await database.AnonymousSessions.AsNoTracking()
             .Where(session => session.TokenHash == tokenHash && session.ExpiresAt > now)
-            .Select(session => new SessionValidationResponse(session.Id, true, session.ExpiresAt))
+            .Select(session => new SessionResponse(session.Id, session.ExpiresAt))
             .SingleOrDefaultAsync(cancellationToken);
     }
 
     public async Task<SessionResponse?> RefreshAsync(string? token, CancellationToken cancellationToken = default)
     {
         var session = await ValidateAsync(token, cancellationToken);
-        if (session is null) return null;
+        if (session is null || token is null) return null;
 
         var now = clock.GetUtcNow().UtcDateTime;
         var expiresAt = now.Add(TokenLifetime);
-        var oldHash = Hash(token!);
+        var oldHash = Hash(token);
         var newToken = GenerateToken();
         var newHash = Hash(newToken);
         // Compare-and-swap: only one refresh can replace a given token.
@@ -61,6 +65,6 @@ internal sealed class AnonymousSessionService(ImAiDbContext database, TimeProvid
 
     private static string GenerateToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private static string Hash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
-    private static bool IsTokenFormatValid(string? token) =>
+    private static bool IsTokenFormatValid([NotNullWhen(true)] string? token) =>
         token is { Length: 64 } && token.All(character => char.IsAsciiHexDigit(character));
 }
