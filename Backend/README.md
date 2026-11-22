@@ -19,7 +19,7 @@ Minimal API definitions live in `src/ImAI.Api/Endpoints`, separately from `Progr
 
 | Method | Route | Input | Success | Definition |
 | --- | --- | --- | --- | --- |
-| POST | `/api/ai/chat` | JSON: `query` | 200: raw AI answer as `text/plain` | `AiEndpoints.cs` |
+| POST | `/api/ai/chat` | JSON: `query`, optional `conversationId` (UUID) | 200: `conversationId`, `messageId`, `result`, `source` array | `AiEndpoints.cs` |
 | POST | `/api/documents` | Multipart form with one `file` field | 200: document receipt with `status: received-not-stored`, `isSimulated: true` | `DocumentEndpoints.cs` |
 | GET | `/health` | None | 200: health and phase-2-stub mode | `Program.cs` |
 
@@ -53,10 +53,16 @@ CORS defaults to `http://localhost:4200`. Override `Cors:AllowedOrigins` in conf
 dotnet test ImAI.slnx
 ```
 
-HTTP integration tests use `WebApplicationFactory` and verify raw AI response forwarding using a fake service, long queries, invalid input, malformed JSON, file acceptance/rejection, missing files, the removed dummy chat route, Swagger routes, and safe global exception responses.
+HTTP integration tests use `WebApplicationFactory` and verify structured AI replies using a fake service, long queries, invalid input, malformed JSON, file acceptance/rejection, missing files, the removed dummy chat route, Swagger routes, and safe global exception responses.
 
 Reference: [ASP.NET Core API error handling](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/handle-errors).
 
 ## Swagger UI
 
 In Development, open `/swagger` to explore and call the Minimal API endpoints. Swagger UI uses the existing `/openapi/v1.json` document. Launch profiles open Swagger automatically. For example, `dotnet run --project src/ImAI.Api` serves it at `http://localhost:5041/swagger`. Documentation routes are enabled only in Development.
+
+## AI conversation contract
+
+`POST /api/ai/chat` accepts `{ "query": "Your question", "conversationId": "5d15c0eb-1988-40da-b4df-b67a435f1c94" }`. Omit `conversationId` (or send `null`) for a new conversation. A supplied ID must be a non-empty UUID.
+
+The JSON response contains `conversationId`, a new UUID `messageId` for this reply, `result` with the AI answer text, and `source` as an array. `source` is currently empty because document retrieval is not connected. Reuse the returned conversation ID in subsequent requests to correlate replies. IDs do not yet enable stored conversation history or multi-turn model context.

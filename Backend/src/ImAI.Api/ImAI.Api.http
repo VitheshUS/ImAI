@@ -14,8 +14,8 @@ Content-Type: application/json
 
 {"query":""}
 
-### Azure AI chat (raw text response)
+### Azure AI chat (structured response)
 POST {{ImAI}}/api/ai/chat
 Content-Type: application/json
 
-{"query":"Explain retrieval augmented generation in detail."}
+{"query":"Explain retrieval augmented generation in detail.","conversationId":"5d15c0eb-1988-40da-b4df-b67a435f1c94"}

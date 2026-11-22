@@ -15,7 +15,7 @@ public sealed class AzureChatService : IAzureChatService
     {
         var azureClient = new AzureOpenAIClient(
             new Uri(endpoint),
-            new DefaultAzureCredential());
+            new AzureCliCredential());
 
         _chatClient = azureClient
             .GetChatClient(deploymentName)
@@ -26,6 +26,7 @@ public sealed class AzureChatService : IAzureChatService
         string question,
         CancellationToken cancellationToken = default)
     {
+        
         var response = await _chatClient.GetResponseAsync(
             [
                 new ChatMessage(
