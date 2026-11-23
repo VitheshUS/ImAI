@@ -80,6 +80,7 @@ namespace ImAI.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -87,6 +88,36 @@ namespace ImAI.Infrastructure.Persistence.Migrations
                     b.HasIndex("SessionId");
 
                     b.ToTable("Conversation", (string)null);
+                });
+
+            modelBuilder.Entity("ImAI.Domain.Entities.ConversationSummary", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("LastSummarizedSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId")
+                        .IsUnique();
+
+                    b.ToTable("ConversationSummary", (string)null);
                 });
 
             modelBuilder.Entity("ImAI.Domain.Entities.ChatMessage", b =>
@@ -111,6 +142,17 @@ namespace ImAI.Infrastructure.Persistence.Migrations
                     b.Navigation("Session");
                 });
 
+            modelBuilder.Entity("ImAI.Domain.Entities.ConversationSummary", b =>
+                {
+                    b.HasOne("ImAI.Domain.Entities.Conversation", "Conversation")
+                        .WithOne("Summary")
+                        .HasForeignKey("ImAI.Domain.Entities.ConversationSummary", "ConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+                });
+
             modelBuilder.Entity("ImAI.Domain.Entities.AnonymousSession", b =>
                 {
                     b.Navigation("Conversations");
@@ -119,6 +161,8 @@ namespace ImAI.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("ImAI.Domain.Entities.Conversation", b =>
                 {
                     b.Navigation("ChatMessages");
+
+                    b.Navigation("Summary");
                 });
 #pragma warning restore 612, 618
         }

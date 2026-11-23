@@ -8,6 +8,7 @@ public sealed class ImAiDbContext(DbContextOptions<ImAiDbContext> options) : DbC
     public DbSet<AnonymousSession> AnonymousSessions => Set<AnonymousSession>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<ConversationSummary> ConversationSummaries => Set<ConversationSummary>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -23,9 +24,21 @@ public sealed class ImAiDbContext(DbContextOptions<ImAiDbContext> options) : DbC
         {
             entity.ToTable("Conversation");
             entity.HasKey(conversation => conversation.Id);
+            entity.Property(conversation => conversation.UpdatedAt).IsConcurrencyToken();
             entity.HasOne(conversation => conversation.Session)
                 .WithMany(session => session.Conversations)
                 .HasForeignKey(conversation => conversation.SessionId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ConversationSummary>(entity =>
+        {
+            entity.ToTable("ConversationSummary");
+            entity.HasKey(summary => summary.Id);
+            entity.Property(summary => summary.Content).IsRequired();
+            entity.HasOne(summary => summary.Conversation)
+                .WithOne(conversation => conversation.Summary)
+                .HasForeignKey<ConversationSummary>(summary => summary.ConversationId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

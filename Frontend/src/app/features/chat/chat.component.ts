@@ -1,9 +1,8 @@
-import { Component, inject, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, inject, ViewChild, ElementRef, AfterViewChecked, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RagChatService } from '../../core/services/rag-chat.service';
-import { RagSettingsService } from '../../core/services/rag-settings.service';
 import { Citation } from '../../core/models/rag.model';
 
 @Component({
@@ -13,21 +12,24 @@ import { Citation } from '../../core/models/rag.model';
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss',
 })
-export class ChatComponent implements AfterViewChecked {
+export class ChatComponent implements AfterViewChecked, OnInit {
   readonly chatService = inject(RagChatService);
-  readonly settingsService = inject(RagSettingsService);
 
   @ViewChild('messagesContainer') private messagesContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('promptTextarea') private promptTextarea!: ElementRef<HTMLTextAreaElement>;
+
+  ngOnInit(): void {
+    void this.chatService.loadConversations();
+  }
 
   userPrompt = '';
   private shouldScrollToBottom = false;
 
   readonly starterQuestions = [
-    'How does ImAI ensure accurate grounding and prevent hallucinations?',
-    'What is the semantic chunking strategy used in the architecture?',
-    'Explain the SOC2 compliance and data retention guidelines.',
-    'How does hybrid retrieval combine BM25 and dense vector scoring?',
+    'Explain retrieval augmented generation in simple terms.',
+    'How do embeddings represent meaning?',
+    'Compare keyword and semantic search.',
+    'Help me plan a document search application.',
   ];
 
   ngAfterViewChecked(): void {

@@ -313,3 +313,14 @@ nav .active {
     display: none;
   }
 }
+
+.history-error {
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: #f1c4bc;
+}
+.history-error button {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  padding: 0.5rem;
+}

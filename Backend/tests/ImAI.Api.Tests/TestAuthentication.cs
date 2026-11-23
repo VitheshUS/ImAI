@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using ImAI.Application.Sessions;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,7 +18,11 @@ internal static class TestAuthentication
 internal sealed class TestSessionHandler(IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger, UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync() =>
-        Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(
-            new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], Scheme.Name)), Scheme.Name)));
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        var session = new SessionResponse(Guid.NewGuid(), DateTime.UtcNow.AddDays(7));
+        Context.Features.Set(session);
+        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(
+            new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, session.SessionId.ToString())], Scheme.Name)), Scheme.Name)));
+    }
 }

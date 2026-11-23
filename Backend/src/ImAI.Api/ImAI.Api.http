@@ -1,6 +1,6 @@
 ﻿@ImAI = https://localhost:7106
 
-### Create anonymous session first; enable your HTTP client's cookie jar
+### Create anonymous session first; enable your HTTP client's cookie jar (existing valid cookie reuses session)
 POST {{ImAI}}/api/sessions
 
 ### Validate current cookie (no body/token in JSON)
@@ -9,13 +9,13 @@ POST {{ImAI}}/api/sessions/validate
 ### Refresh cookie; save the updated Set-Cookie automatically
 POST {{ImAI}}/api/sessions/refresh
 
-### AI chat; the cookie jar attaches the session cookie
+### New conversation; the cookie jar attaches the session cookie
 POST {{ImAI}}/api/ai/chat
 Content-Type: application/json
 
 {"query":"How does retrieval work?"}
 
-### Existing conversation
+### Follow-up: replace conversationId with the ID returned by the first chat response
 POST {{ImAI}}/api/ai/chat
 Content-Type: application/json
 

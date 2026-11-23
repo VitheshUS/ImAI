@@ -15,13 +15,15 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
         var status = exception switch
         {
             RequestValidationException => StatusCodes.Status400BadRequest,
+            ConversationNotFoundException => StatusCodes.Status404NotFound,
+            ConversationConflictException => StatusCodes.Status409Conflict,
             BadHttpRequestException badRequest => badRequest.StatusCode,
             _ => StatusCodes.Status500InternalServerError
         };
         if (status >= 500) logger.LogError(exception, "Unhandled request failure. TraceId: {TraceId}", context.TraceIdentifier);
         await Results.Problem(statusCode: status,
             title: status >= 500 ? "An unexpected error occurred." : "Request rejected.",
-            detail: exception is RequestValidationException ? exception.Message : null)
+            detail: exception is RequestValidationException or ConversationNotFoundException or ConversationConflictException ? exception.Message : null)
             .ExecuteAsync(context);
         return true;
     }

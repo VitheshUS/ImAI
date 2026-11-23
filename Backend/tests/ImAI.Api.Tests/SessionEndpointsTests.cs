@@ -155,7 +155,7 @@ public sealed class SessionEndpointsTests
 
     private sealed class ContextChatService(IHttpContextAccessor accessor) : IAzureChatService
     {
-        public Task<string> AskAsync(string question, CancellationToken cancellationToken = default)
+        public Task<string> AskAsync(IReadOnlyList<ChatTurn> messages, CancellationToken cancellationToken = default)
         {
             var context = accessor.HttpContext!;
             return Task.FromResult(context.GetCurrentSession()!.SessionId + ":" + context.User.FindFirstValue(ClaimTypes.NameIdentifier));

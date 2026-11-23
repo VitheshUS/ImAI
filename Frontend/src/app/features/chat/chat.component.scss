@@ -366,3 +366,20 @@
     font-size: 29px;
   }
 }
+
+.chat-error {
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid #8d5952;
+  border-radius: 0.5rem;
+  color: #f1c4bc;
+  font-size: 0.875rem;
+}
+.chat-error button,
+.retry-message {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  margin-left: 0.5rem;
+  font-size: 0.875rem;
+  padding: 0.5rem;
+}

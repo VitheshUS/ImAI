@@ -23,9 +23,14 @@ export interface ChatMessage {
   retrievalLatencyMs?: number;
   tokenCount?: number;
   selectedCollection?: string;
+  delivery?: 'sending' | 'sent' | 'failed';
 }
 
 export interface ConversationThread {
+  conversationId?: string;
+  messagesLoaded?: boolean;
+  loading?: boolean;
+  error?: string;
   id: string;
   title: string;
   createdAt: Date;

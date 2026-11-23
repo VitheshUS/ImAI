@@ -17,8 +17,8 @@ public static class SessionEndpoints
             return await next(context);
         });
 
-        group.MapPost("", async (IAnonymousSessionService sessions, CancellationToken cancellationToken) =>
-            Results.Ok(await sessions.CreateAsync(cancellationToken))).AllowAnonymous().WithName("CreateAnonymousSession").Produces<SessionResponse>();
+        group.MapPost("", async (HttpContext context, IAnonymousSessionService sessions, CancellationToken cancellationToken) =>
+            Results.Ok(context.GetCurrentSession() ?? await sessions.CreateAsync(cancellationToken))).AllowAnonymous().WithName("CreateAnonymousSession").Produces<SessionResponse>();
 
         group.MapPost("/validate", (HttpContext context) =>
         {

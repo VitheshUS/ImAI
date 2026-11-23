@@ -20,6 +20,7 @@ public static class DependencyInjection
             configuration.GetConnectionString("ImAI") ?? SqliteDatabase.DefaultConnectionString));
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<IAnonymousSessionService, AnonymousSessionService>();
+        services.AddScoped<IConversationStore, ConversationStore>();
         services.AddSingleton<IChatClient>(_ =>
         {
             var endpoint = configuration["AzureOpenAI:Endpoint"];

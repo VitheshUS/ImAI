@@ -1,0 +1,29 @@
+.session-notice {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  padding: 1rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.5rem;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 8px 30px #0006;
+  font-size: 1rem;
+}
+.session-notice button {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.25rem;
+  color: var(--accent-primary);
+  font-size: 0.875rem;
+}
+.session-notice button:disabled {
+  opacity: 0.5;
+}

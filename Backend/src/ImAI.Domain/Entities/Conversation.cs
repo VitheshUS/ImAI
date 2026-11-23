@@ -8,5 +8,6 @@ public sealed class Conversation
     public DateTime UpdatedAt { get; set; }
 
     public AnonymousSession Session { get; set; } = null!;
+    public ConversationSummary? Summary { get; set; }
     public ICollection<ChatMessage> ChatMessages { get; set; } = new List<ChatMessage>();
 }

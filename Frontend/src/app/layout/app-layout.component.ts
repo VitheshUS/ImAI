@@ -49,7 +49,10 @@ export class AppLayoutComponent {
 
   onDeleteThread(event: Event, id: string): void {
     event.stopPropagation();
-    this.chatService.deleteThread(id);
+    const thread = this.chatService.threads().find((t) => t.id === id);
+    if (thread?.conversationId && !confirm('Delete this conversation and its saved messages?'))
+      return;
+    void this.chatService.deleteThread(id);
   }
 
   onCollectionChange(collectionId: string): void {

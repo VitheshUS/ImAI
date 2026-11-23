@@ -2,6 +2,7 @@
 using System.Net.Http.Json;
 using System.Text;
 using ImAI.Application.Abstractions;
+using ImAI.Application.Chat;
 using ImAI.Domain.Documents;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -77,6 +78,6 @@ public sealed class EndpointTests : IClassFixture<WebApplicationFactory<Program>
     }
     private sealed class ThrowingResponder : IAzureChatService
     {
-        public Task<string> AskAsync(string query, CancellationToken cancellationToken = default) => throw new InvalidOperationException("secret-internal-detail");
+        public Task<string> AskAsync(IReadOnlyList<ChatTurn> messages, CancellationToken cancellationToken = default) => throw new InvalidOperationException("secret-internal-detail");
     }
 }

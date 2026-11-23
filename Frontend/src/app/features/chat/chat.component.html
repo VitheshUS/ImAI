@@ -10,25 +10,26 @@
         }}
       </h1>
     </div>
-    <span class="pill"><i class="status-dot"></i> Knowledge chat</span>
+    <span class="pill"><i class="status-dot"></i> AI chat</span>
   </div>
   <div class="messages" #messagesContainer aria-live="polite">
-    @if (!chatService.activeThread()?.messages?.length) {
+    @if (chatService.isLoading()) {
+      <p class="generating">Loading conversation…</p>
+    } @else if (!chatService.activeThread()?.messages?.length) {
       <section class="welcome">
         <div class="orb"><span>✳</span><i class="orb-point"></i></div>
         <div class="eyebrow">THINK BEYOND THE SEARCH BAR</div>
         <h2>Your knowledge,<br /><span>one conversation away.</span></h2>
         <p>
-          Connect the dots across your documents.<br />Ask a question. Find clarity. Follow the
-          source.
+          Ask a question and explore ideas with ImAI.<br />Your conversations are saved in your
+          session.
         </p>
         <div class="suggestions">
           <button
             *ngFor="let question of starterQuestions; let i = index"
             (click)="selectStarterQuestion(question)"
           >
-            <span class="suggestion-icon">{{ ['⌕', '▤', '◇', '↗'][i] }}</span
-            ><strong>{{
+            <span class="suggestion-icon">{{ ['⌕', '▤', '◇', '↗'][i] }}</span><strong>{{
               [
                 'Explore your knowledge',
                 'Understand the details',
@@ -52,45 +53,54 @@
             <div class="message-meta">
               {{ message.role === 'user' ? 'You' : 'ImAI'
               }}<small>{{ message.timestamp | date: 'shortTime' }}</small
-              ><span *ngIf="message.role === 'assistant'">DEMO RESPONSE</span>
+              ><span *ngIf="message.role === 'assistant'">AI RESPONSE</span>
             </div>
             <div class="message-text">{{ message.content }}</div>
+            @if (message.delivery === 'failed') {
+              <button
+                class="retry-message"
+                [disabled]="chatService.isGenerating()"
+                (click)="chatService.retryMessage(chatService.activeThreadId(), message.id)"
+              >
+                Not sent · Retry
+              </button>
+            }
             <div class="citations" *ngIf="message.citations?.length">
               <button
                 *ngFor="let citation of message.citations"
                 (click)="onInspectCitation(citation)"
               >
-                <span>{{ citation.index }}</span
-                >{{ citation.documentTitle }} ↗
+                <span>{{ citation.index }}</span>{{ citation.documentTitle }} ↗
               </button>
             </div>
           </div>
         </article>
         <div class="generating" *ngIf="chatService.isGenerating()">
-          <span class="status-dot"></span> Preparing a sample response…
+          <span class="status-dot"></span> ImAI is responding…
         </div>
       </div>
     }
   </div>
   <div class="composer-area">
+    @if (chatService.activeThread()?.error) {
+      <div class="chat-error" role="alert">
+        {{ chatService.activeThread()?.error }}
+        @if (chatService.activeThread()?.conversationId) {
+          <button (click)="chatService.loadThread(chatService.activeThreadId())">
+            Reload conversation
+          </button>
+        }
+      </div>
+    }
     <div class="context-row">
-      <span><i class="status-dot"></i> KNOWLEDGE CONTEXT</span
-      ><select
-        aria-label="Knowledge collection"
-        [ngModel]="settingsService.settings().activeCollectionId"
-        (ngModelChange)="settingsService.updateSettings({ activeCollectionId: $event })"
-      >
-        <option *ngFor="let col of settingsService.defaultCollections" [value]="col.id">
-          {{ col.name }}
-        </option>
-      </select>
+      <span>DIRECT AI CHAT</span><span>No document or conversation context is sent.</span>
     </div>
     <div class="composer">
       <textarea
         #promptTextarea
         [(ngModel)]="userPrompt"
         (keydown)="onKeyDown($event)"
-        placeholder="Ask anything about your knowledge base…"
+        placeholder="Message ImAI…"
         aria-label="Message ImAI"
         rows="2"
       ></textarea>
@@ -100,7 +110,12 @@
           <small>Enter to send <span>·</span> Shift + Enter for a new line</small
           ><button
             (click)="onSendMessage()"
-            [disabled]="!userPrompt.trim() || chatService.isGenerating()"
+            [disabled]="
+              !userPrompt.trim() ||
+              chatService.isGenerating() ||
+              chatService.isLoading() ||
+              chatService.activeThread()?.messagesLoaded === false
+            "
             aria-label="Send message"
           >
             ↑
@@ -108,8 +123,6 @@
         </div>
       </div>
     </div>
-    <p class="composer-hint">
-      ✧ Frontend demo. Responses and citations are simulated. Always verify the source.
-    </p>
+    <p class="composer-hint">AI responses may be inaccurate. Verify important information.</p>
   </div>
 </div>

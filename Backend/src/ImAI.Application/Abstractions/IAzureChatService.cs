@@ -1,6 +1,8 @@
-﻿namespace ImAI.Application.Abstractions;
+using ImAI.Application.Chat;
+
+namespace ImAI.Application.Abstractions;
 
 public interface IAzureChatService
 {
-    Task<string> AskAsync(string question, CancellationToken cancellationToken = default);
+    Task<string> AskAsync(IReadOnlyList<ChatTurn> messages, CancellationToken cancellationToken = default);
 }

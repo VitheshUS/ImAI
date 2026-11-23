@@ -23,6 +23,7 @@ if (app.Environment.IsDevelopment())
 }
 app.MapSessionEndpoints();
 app.MapAiEndpoints();
+app.MapConversationEndpoints();
 app.MapDocumentEndpoints();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithTags("Health");
 app.Run();

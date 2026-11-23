@@ -1,16 +1,21 @@
 using ImAI.Application.Abstractions;
+using ImAI.Application.Chat;
 using Microsoft.Extensions.AI;
 
 namespace ImAI.Infrastructure.Chat;
 
 public sealed class AzureChatService(IChatClient chatClient) : IAzureChatService
 {
-    public async Task<string> AskAsync(string question, CancellationToken cancellationToken = default)
+    public async Task<string> AskAsync(IReadOnlyList<ChatTurn> messages, CancellationToken cancellationToken = default)
     {
-        var response = await chatClient.GetResponseAsync(
-            [new ChatMessage(ChatRole.System, "You are ImAI, a helpful AI assistant."),
-             new ChatMessage(ChatRole.User, question)],
-            cancellationToken: cancellationToken);
+        var history = new List<ChatMessage> { new(ChatRole.System, "You are ImAI, a helpful AI assistant.") };
+        history.AddRange(messages.Select(message => new ChatMessage(message.Role switch
+        {
+            "user" => ChatRole.User,
+            "assistant" => ChatRole.Assistant,
+            _ => throw new InvalidOperationException("Unsupported conversation message role.")
+        }, message.Content)));
+        var response = await chatClient.GetResponseAsync(history, cancellationToken: cancellationToken);
         return response.Text;
     }
 }

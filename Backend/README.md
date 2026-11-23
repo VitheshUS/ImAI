@@ -1,6 +1,6 @@
 ﻿# ImAI backend
 
-.NET 10 Minimal API with Clean Architecture, MediatR, Azure OpenAI chat, and SQLite-backed anonymous sessions. Document ingestion remains an explicit stub; file bytes are discarded. Retrieval, stored conversation history, and conversation ownership enforcement are not connected yet.
+.NET 10 Minimal API with Clean Architecture, MediatR, Azure OpenAI chat, and SQLite-backed anonymous sessions. Document ingestion remains an explicit stub; file bytes are discarded. Conversations and messages are persisted in SQLite and scoped to the anonymous session. Retrieval is not connected yet.
 
 ## Run
 
@@ -27,7 +27,7 @@ Open `https://localhost:7106/swagger` in Development. Trust the local certificat
 
 Create a session before calling protected endpoints. Browser clients attach the cookie automatically; use `withCredentials: true` in Angular HttpClient or `credentials: 'include'` in fetch. Swagger's same-origin requests also use the cookie. HTTP examples are in `src/ImAI.Api/ImAI.Api.http`.
 
-Queries must contain non-whitespace text. Omitting or sending null `conversationId` generates a new UUID; a supplied ID must not be empty. Every reply gets a new message UUID. IDs currently correlate requests only, and do not provide stored multi-turn context. `source` remains empty until retrieval is integrated.
+Queries must contain non-whitespace text. Omitting or sending null `conversationId` starts a new conversation under the authenticated session. Reuse the returned ID on subsequent prompts to continue that conversation. A supplied ID must be non-empty and belong to the current session; unknown and foreign IDs return 404. Every successful exchange saves a user message and an assistant message. The returned `messageId` is the saved assistant message ID. Earlier messages are available for display, but only the current user query is sent to AI in this phase. `source` remains empty until retrieval is integrated.
 
 Uploads accept PDF, DOCX, Markdown, TXT, CSV, and JSON extensions. Files must be non-empty and at most 50 MiB. The 51 MiB server request limit includes multipart overhead and derives from the same file-size constant. Extension checks do not inspect document contents.
 
@@ -39,7 +39,7 @@ Uploads accept PDF, DOCX, Markdown, TXT, CSV, and JSON extensions. Files must be
 - `ConnectionStrings:ImAI`: optional SQLite connection string. Default: `Backend/imai.db` in this checkout, or `imai.db` beside published binaries. `ConnectionStrings__ImAI` overrides both runtime configuration and EF tooling. The design-time factory otherwise uses the default path; it does not load API appsettings files.
 - `Cors:AllowedOrigins`: exact HTTP(S) origins. Defaults: `http://localhost:4200` and `https://localhost:4200`. CORS and POST origin validation share one normalized configuration. Wildcards, credentials, and non-root paths are rejected.
 
-Use the same site and scheme for frontend and API with SameSite=Lax cookies; different HTTPS localhost ports are supported. The frontend currently retains its own demo services and is not connected to this API.
+Use the same site and scheme for frontend and API with SameSite=Lax cookies; different HTTPS localhost ports are supported. The frontend initializes its session and connects chat, conversation history, and conversation deletion to this API. Document management retains its frontend demo implementation.
 
 ## Session behavior
 
@@ -57,6 +57,7 @@ Rejected requests do not clear cookies: a stale concurrent request must not dele
 | Application | One real `SendChatQuery` handler replaces the obsolete dummy request/response path; `ReceiveDocument` handles ingestion validation | Mediator / request-handler pattern through MediatR |
 | Infrastructure | Azure, SQLite, session hashing, and storage implement application interfaces | Dependency inversion, adapters |
 | Sessions | One metadata response replaces the redundant always-valid DTO; token writing is a separate port | Interface segregation, adapter pattern |
+| Conversations | Application handler sends the current query; a specialized store queries by session ownership and atomically saves both messages | MediatR, persistence adapter, optimistic concurrency |
 | Refresh | Conditional database update includes the original hash and expiry | Optimistic concurrency / compare-and-swap |
 | Azure client | DI owns one thread-safe `IChatClient`; scoped service consumes it | Dependency injection and managed lifetime |
 | Persistence | EF Core maps sessions, conversations, messages, and relationships; token hash is indexed | DbContext unit of work, EF migrations |
@@ -85,3 +86,20 @@ Tests cover HTTP contracts, input validation, long queries, cookie security, has
 - `Endpoints/`: Minimal API route definitions.
 
 Each folder has a matching namespace. API DI registration remains in the API project's root `DependencyInjection.cs`.
+
+## Conversation workflow
+
+1. Call `POST /api/sessions` once and retain the HttpOnly cookie. Calling it again with the same valid cookie reuses the session and does not rotate the token or extend its expiry. A missing/expired cookie requires a new session. Tabs in the same browser profile share the cookie.
+2. Send `POST /api/ai/chat` with `{ "query": "Hello" }` to start a conversation. The response includes its `conversationId`.
+3. For follow-ups, send `{ "query": "Explain more", "conversationId": "ID_FROM_PREVIOUS_RESPONSE" }` with the same session cookie. The server validates ownership and saves the new exchange. Stored history is available for display but is not sent to AI.
+4. To start another chat, omit `conversationId` again. Both conversations remain associated with the same session and their histories stay separate.
+
+Both message rows and the conversation timestamp are committed together only after the AI call succeeds. Failed AI calls do not leave partial exchanges. `UpdatedAt` acts as an EF concurrency token: if two prompts read the same history and compete to save, one receives 409 and must retry against the updated history. No database transaction is held open while waiting for AI. The current implementation sends only the current query to AI, plus the fixed system instruction. Document context, saved history, and summaries are not added. Session refresh retains conversation ownership because the session ID does not change.
+
+## Conversation history endpoints
+
+- `GET /api/conversations`: lists the current session's saved conversations.
+- `GET /api/conversations/{id}`: loads that session's conversation and ordered messages.
+- `DELETE /api/conversations/{id}`: deletes the conversation, its messages, and its summary in a single transaction.
+
+All require the session cookie. Unknown and foreign conversation IDs return 404. The frontend loads this list when the chat screen opens, loads messages when a saved conversation is selected, and retains each returned conversation ID independently for follow-up prompts.

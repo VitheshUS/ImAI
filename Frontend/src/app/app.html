@@ -1,1 +1,15 @@
+@if (sessionService.error() || sessionService.initializing()) {
+  <div class="session-notice" role="alert">
+    <span>{{
+      sessionService.initializing() ? 'Connecting your session…' : sessionService.error()
+    }}</span>
+    <button
+      type="button"
+      (click)="sessionService.initialize()"
+      [disabled]="sessionService.initializing()"
+    >
+      Retry
+    </button>
+  </div>
+}
 <router-outlet></router-outlet>
