@@ -60,9 +60,13 @@ namespace ImAI.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("ConversationId");
+                    b.HasIndex("ConversationId", "Sequence")
+                        .IsUnique();
 
                     b.ToTable("ChatMessage", (string)null);
                 });

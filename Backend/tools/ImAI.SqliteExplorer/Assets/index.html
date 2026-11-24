@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ImAI · Database explorer</title>
+    <link rel="stylesheet" href="/dev/database/explorer.css" />
+    <script src="/dev/database/explorer.js" defer></script>
+  </head>
+  <body>
+    <aside>
+      <a class="brand" href="/dev/database">ImAI <span>development</span></a>
+      <div class="section-label"><h2>Tables &amp; views</h2><button id="refresh" type="button">Refresh</button></div>
+      <nav id="tables" aria-label="Database tables"></nav>
+    </aside>
+    <main>
+      <header><div><p class="eyebrow">SQLite · Read only</p><h1>Database explorer</h1></div><a href="/swagger">API docs ↗</a></header>
+      <section id="schema" aria-label="Table schema"><p>Select a table to see its columns and rows, or write a query below.</p></section>
+      <form id="query-form">
+        <label for="sql">SQL query</label>
+        <textarea id="sql" spellcheck="false" rows="6">SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') ORDER BY name;</textarea>
+        <div class="query-actions"><p>One SELECT, WITH, or EXPLAIN statement · Up to 500 rows</p><button id="run" type="submit">Run query <span>Ctrl + Enter</span></button></div>
+      </form>
+      <p id="status" role="status" aria-live="polite"></p>
+      <div id="results" tabindex="0" aria-label="Query results"></div>
+    </main>
+  </body>
+</html>

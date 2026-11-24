@@ -23,7 +23,7 @@ public sealed class GetConversationHandler(IConversationStore store) : IRequestH
     {
         var conversation = await store.FindAsync(request.SessionId, request.ConversationId, cancellationToken)
             ?? throw new ConversationNotFoundException();
-        var messages = conversation.ChatMessages.OrderBy(m => m.CreatedAt).ThenBy(m => m.Id)
+        var messages = conversation.ChatMessages.OrderBy(m => m.Sequence)
             .Select(m => new StoredChatMessage(m.Id, m.Role, m.Content, m.CreatedAt)).ToArray();
         return new(conversation.Id, messages.FirstOrDefault(m => m.Role == "user")?.Content ?? "New conversation",
             conversation.CreatedAt, conversation.UpdatedAt, messages);

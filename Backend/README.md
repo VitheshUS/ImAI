@@ -37,6 +37,7 @@ Uploads accept PDF, DOCX, Markdown, TXT, CSV, and JSON extensions. Files must be
 - `AzureOpenAI:ChatDeployment`: deployment name. The shared SDK client is created lazily, so cloud configuration is needed only when chat is used.
 - Azure credentials: Development uses `AzureCliCredential` to match the signed-in Azure CLI identity. `AzureOpenAI:TenantId` pins the resource tenant, and optional `AzureOpenAI:AzureCliDirectory` adds a portable CLI directory to the application process PATH. Outside Development, the default credential mode is `Default`. Set `AzureOpenAI:Credential` to `AzureCli` or `Default` explicitly to override it.
 - `ConnectionStrings:ImAI`: optional SQLite connection string. Default: `Backend/imai.db` in this checkout, or `imai.db` beside published binaries. `ConnectionStrings__ImAI` overrides both runtime configuration and EF tooling. The design-time factory otherwise uses the default path; it does not load API appsettings files.
+- `ConversationContext:SystemInstructions`: required system instructions, configured in API `appsettings.json`. Shared by the conversation context reader and Azure chat service; override through environment-specific configuration or `ConversationContext__SystemInstructions`.
 - `Cors:AllowedOrigins`: exact HTTP(S) origins. Defaults: `http://localhost:4200` and `https://localhost:4200`. CORS and POST origin validation share one normalized configuration. Wildcards, credentials, and non-root paths are rejected.
 
 Use the same site and scheme for frontend and API with SameSite=Lax cookies; different HTTPS localhost ports are supported. The frontend initializes its session and connects chat, conversation history, and conversation deletion to this API. Document management retains its frontend demo implementation.
@@ -57,7 +58,7 @@ Rejected requests do not clear cookies: a stale concurrent request must not dele
 | Application | One real `SendChatQuery` handler replaces the obsolete dummy request/response path; `ReceiveDocument` handles ingestion validation | Mediator / request-handler pattern through MediatR |
 | Infrastructure | Azure, SQLite, session hashing, and storage implement application interfaces | Dependency inversion, adapters |
 | Sessions | One metadata response replaces the redundant always-valid DTO; token writing is a separate port | Interface segregation, adapter pattern |
-| Conversations | Application handler sends the current query; a specialized store queries by session ownership and atomically saves both messages | MediatR, persistence adapter, optimistic concurrency |
+| Conversations | Application handler builds summary-aware context; a specialized store queries by session ownership and atomically saves both messages | MediatR, persistence adapter, optimistic concurrency |
 | Refresh | Conditional database update includes the original hash and expiry | Optimistic concurrency / compare-and-swap |
 | Azure client | DI owns one thread-safe `IChatClient`; scoped service consumes it | Dependency injection and managed lifetime |
 | Persistence | EF Core maps sessions, conversations, messages, and relationships; token hash is indexed | DbContext unit of work, EF migrations |
@@ -91,10 +92,45 @@ Each folder has a matching namespace. API DI registration remains in the API pro
 
 1. Call `POST /api/sessions` once and retain the HttpOnly cookie. Calling it again with the same valid cookie reuses the session and does not rotate the token or extend its expiry. A missing/expired cookie requires a new session. Tabs in the same browser profile share the cookie.
 2. Send `POST /api/ai/chat` with `{ "query": "Hello" }` to start a conversation. The response includes its `conversationId`.
-3. For follow-ups, send `{ "query": "Explain more", "conversationId": "ID_FROM_PREVIOUS_RESPONSE" }` with the same session cookie. The server validates ownership and saves the new exchange. Stored history is available for display but is not sent to AI.
+3. For follow-ups, send `{ "query": "Explain more", "conversationId": "ID_FROM_PREVIOUS_RESPONSE" }` with the same session cookie. The server validates ownership, reads summary-aware context, calls AI, and saves the new exchange.
 4. To start another chat, omit `conversationId` again. Both conversations remain associated with the same session and their histories stay separate.
 
-Both message rows and the conversation timestamp are committed together only after the AI call succeeds. Failed AI calls do not leave partial exchanges. `UpdatedAt` acts as an EF concurrency token: if two prompts read the same history and compete to save, one receives 409 and must retry against the updated history. No database transaction is held open while waiting for AI. The current implementation sends only the current query to AI, plus the fixed system instruction. Document context, saved history, and summaries are not added. Session refresh retains conversation ownership because the session ID does not change.
+Both message rows and the conversation timestamp are committed together only after the AI call succeeds. Failed AI calls do not leave partial exchanges. `UpdatedAt` acts as an EF concurrency token: if two prompts read the same history and compete to save, one receives 409 and must retry against the updated history. No database transaction is held open while waiting for AI. Session refresh retains conversation ownership because the session ID does not change.
+
+## Conversation context reader
+
+`IConversationContextReader` is an Application abstraction implemented by the scoped Infrastructure `ConversationContextReader`. Call `ReadAsync(sessionId, conversationId, currentMessage, cancellationToken)` to obtain a `ConversationContextDto` from `Application/Dtos`:
+
+```json
+{
+  "systemInstructions": "You are ImAI, an intelligent portfolio assistant.",
+  "conversationSummary": "The user is exploring RAG architecture and Azure AI Search.",
+  "recentMessages": [
+    { "role": "user", "content": "What is vector search?" },
+    { "role": "assistant", "content": "Vector search retrieves information based on semantic similarity." }
+  ],
+  "retrievedKnowledge": [],
+  "currentMessage": "Does Azure AI Search support hybrid search?"
+}
+```
+
+The reader projects directly from the unique conversation summary and related messages into DTOs using an untracked EF query. It includes only messages with `Sequence > LastSummarizedSequence`, in ascending sequence order. If there is no summary, or the conversation is unknown or belongs to another session, it returns `null`. A summary with no later messages still returns a context with an empty `recentMessages` list. `currentMessage` is supplied by the caller and remains separate from stored history; `retrievedKnowledge` is an empty string list until retrieval is implemented.
+
+Message sequences start at 1 independently for each conversation and increase by one per message (user, then assistant). A unique `(ConversationId, Sequence)` index enforces uniqueness. The sequence migration backfills existing rows in `CreatedAt`, then `Id` order before creating the index. Run the database update command above for existing databases.
+
+The chat handler calls the reader before generation and passes `ConversationContextDto` to `IAzureChatService`. If no summary exists, it builds a context with configured instructions, empty summary/history/knowledge, and the current query, preserving the reader's no-summary rule. The Azure adapter sends the configured system instructions, optional JSON summary/knowledge reference data as a user message, recent messages with their actual user/assistant roles, then the current prompt exactly once. Reference data is not promoted to system instructions. The current exchange is saved only after generation succeeds, so it is not duplicated in recent history. The reader does not create or update summaries; automatic summarization and knowledge retrieval are still deferred.
+
+## Temporary SQLite explorer
+
+Open **https://localhost:7106/dev/database** while running the backend in Development. The explorer is a separate optional project in `tools/ImAI.SqliteExplorer`, mounted by extension methods in `Program.cs`. It reads the same effective SQLite connection string as `ImAiDbContext`; there is no copied database or separate connection configuration.
+
+- The browser view lists tables/views and columns, previews table rows, and runs SQL queries with horizontally scrollable results. Use Ctrl/Cmd+Enter to run the editor query.
+- `GET /dev/database/tables` returns table and column metadata; `POST /dev/database/query` accepts `{ "sql": "SELECT * FROM ChatMessage ORDER BY ConversationId, Sequence" }` and returns `columns`, `rows`, and `truncated`.
+- Backend development code can inject the scoped `ImAI.SqliteExplorer.ISqliteExplorer` and call `GetTablesAsync(cancellationToken)` or `QueryAsync(sql, cancellationToken)`. These operations use the same read-only implementation as the browser endpoints.
+- Queries accept one SELECT, WITH, or EXPLAIN statement and return at most 500 rows. The SQLite connection itself uses `Mode=ReadOnly` and `PRAGMA query_only=ON`, including when used directly from backend code. Write statements and multiple statements are rejected. No authentication/session cookie is needed for this local development tool; it requires a localhost request and same-origin browser access. Responses are not cached, and endpoints are omitted from OpenAPI.
+- `SqliteExplorer:Enabled` in `appsettings.Development.json` controls the component. Set it to `false` and restart to disable it. It is never mapped outside Development, even if the flag is enabled.
+
+To remove the component entirely, delete its `AddSqliteExplorer` block and `MapSqliteExplorer()` call (and associated usings) in `Program.cs`, remove the API project reference and solution entry, delete `tools/ImAI.SqliteExplorer`, remove its tests, and delete the `SqliteExplorer` configuration section. Application, Domain, and Infrastructure do not reference this tool and need no changes.
 
 ## Conversation history endpoints
 

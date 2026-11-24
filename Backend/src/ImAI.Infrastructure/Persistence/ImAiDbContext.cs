@@ -48,6 +48,7 @@ public sealed class ImAiDbContext(DbContextOptions<ImAiDbContext> options) : DbC
             entity.HasKey(message => message.Id);
             entity.Property(message => message.Role).IsRequired();
             entity.Property(message => message.Content).IsRequired();
+            entity.HasIndex(message => new { message.ConversationId, message.Sequence }).IsUnique();
             entity.HasOne(message => message.Conversation)
                 .WithMany(conversation => conversation.ChatMessages)
                 .HasForeignKey(message => message.ConversationId)

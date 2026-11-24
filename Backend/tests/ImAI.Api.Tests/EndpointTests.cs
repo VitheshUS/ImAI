@@ -78,6 +78,6 @@ public sealed class EndpointTests : IClassFixture<WebApplicationFactory<Program>
     }
     private sealed class ThrowingResponder : IAzureChatService
     {
-        public Task<string> AskAsync(IReadOnlyList<ChatTurn> messages, CancellationToken cancellationToken = default) => throw new InvalidOperationException("secret-internal-detail");
+        public Task<string> AskAsync(ImAI.Application.Dtos.ConversationContextDto context, CancellationToken cancellationToken = default) => throw new InvalidOperationException("secret-internal-detail");
     }
 }

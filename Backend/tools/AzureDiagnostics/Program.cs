@@ -11,7 +11,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ImAI.Application.Abstractions;
-using ImAI.Application.Chat;
+using ImAI.Application.Dtos;
 using ImAI.Infrastructure;
 
 using var identityEvents = new IdentityEvents();
@@ -67,7 +67,8 @@ Console.WriteLine("DI credential type=" + provider.GetRequiredService<TokenCrede
 await Run("EXISTING_DI_PIPELINE", async () =>
 {
     using var serviceScope = provider.CreateScope();
-    var result = await serviceScope.ServiceProvider.GetRequiredService<IAzureChatService>().AskAsync([new ChatTurn("user", "Reply with OK.")]);
+    var result = await serviceScope.ServiceProvider.GetRequiredService<IAzureChatService>().AskAsync(
+        new ConversationContextDto(configuration["ConversationContext:SystemInstructions"]!, string.Empty, [], [], "Reply with OK."));
     Console.WriteLine("DI result length=" + result.Length);
 });
 

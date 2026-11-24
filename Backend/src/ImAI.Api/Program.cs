@@ -3,8 +3,14 @@ using ImAI.Api.Middleware;
 using ImAI.Api.Endpoints;
 using ImAI.Application;
 using ImAI.Infrastructure;
+using ImAI.Infrastructure.Persistence;
+using ImAI.SqliteExplorer;
+using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplication().AddInfrastructure(builder.Configuration).AddApi(builder.Configuration);
+// Temporary local development tool; remove this block and MapSqliteExplorer to detach it.
+if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("SqliteExplorer:Enabled"))
+    builder.Services.AddSqliteExplorer(provider => provider.GetRequiredService<ImAiDbContext>().Database.GetConnectionString()!);
 var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -25,6 +31,7 @@ app.MapSessionEndpoints();
 app.MapAiEndpoints();
 app.MapConversationEndpoints();
 app.MapDocumentEndpoints();
+app.MapSqliteExplorer();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithTags("Health");
 app.Run();
 public partial class Program;

@@ -25,8 +25,8 @@ public sealed class ChatRelationshipTests
         for (var i = 0; i < 2; i++)
         {
             var conversation = new Conversation { Id = Guid.NewGuid(), CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
-            conversation.ChatMessages.Add(new ChatMessage { Id = Guid.NewGuid(), Role = "user", Content = "Hello", CreatedAt = DateTime.UtcNow });
-            conversation.ChatMessages.Add(new ChatMessage { Id = Guid.NewGuid(), Role = "assistant", Content = "Hi", CreatedAt = DateTime.UtcNow });
+            conversation.ChatMessages.Add(new ChatMessage { Id = Guid.NewGuid(), Sequence = 1, Role = "user", Content = "Hello", CreatedAt = DateTime.UtcNow });
+            conversation.ChatMessages.Add(new ChatMessage { Id = Guid.NewGuid(), Sequence = 2, Role = "assistant", Content = "Hi", CreatedAt = DateTime.UtcNow });
             session.Conversations.Add(conversation);
         }
         context.AnonymousSessions.Add(session);

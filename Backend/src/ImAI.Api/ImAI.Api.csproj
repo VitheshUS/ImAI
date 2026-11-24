@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ImAI.Application\ImAI.Application.csproj" />
     <ProjectReference Include="..\ImAI.Infrastructure\ImAI.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\tools\ImAI.SqliteExplorer\ImAI.SqliteExplorer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

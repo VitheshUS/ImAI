@@ -1,4 +1,5 @@
 using ImAI.Application.Abstractions;
+using ImAI.Application.Configuration;
 using Azure.AI.OpenAI;
 using Azure.Identity;
 using Azure.Core;
@@ -24,6 +25,13 @@ public static class DependencyInjection
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<IAnonymousSessionService, AnonymousSessionService>();
         services.AddScoped<IConversationStore, ConversationStore>();
+        services.AddScoped<IConversationContextReader, ConversationContextReader>();
+        services.AddOptions<ConversationContextOptions>()
+            .Configure(options => options.SystemInstructions =
+                configuration[$"{ConversationContextOptions.SectionName}:SystemInstructions"] ?? string.Empty)
+            .Validate(options => !string.IsNullOrWhiteSpace(options.SystemInstructions),
+                "ConversationContext:SystemInstructions is required.")
+            .ValidateOnStart();
         services.AddSingleton<TokenCredential>(provider =>
         {
             var development = provider.GetService<IHostEnvironment>()?.IsDevelopment() == true;

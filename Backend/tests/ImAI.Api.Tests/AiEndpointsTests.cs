@@ -4,6 +4,7 @@ using System.Text.Json;
 using ImAI.Api.Cookies;
 using ImAI.Application.Abstractions;
 using ImAI.Application.Chat;
+using ImAI.Application.Dtos;
 using ImAI.Application.Common;
 using ImAI.Application.Sessions;
 using ImAI.Infrastructure.Persistence;
@@ -36,15 +37,19 @@ public sealed class AiEndpointsTests
         Assert.Equal(reply.ConversationId, conversation.Id);
         Assert.Equal((await db.AnonymousSessions.SingleAsync()).Id, conversation.SessionId);
         Assert.Equal(2, conversation.ChatMessages.Count);
+        Assert.Equal(1, conversation.ChatMessages.Single(m => m.Role == "user").Sequence);
+        Assert.Equal(2, conversation.ChatMessages.Single(m => m.Role == "assistant").Sequence);
         Assert.Equal(query, conversation.ChatMessages.Single(m => m.Role == "user").Content);
         Assert.Equal(reply.MessageId, conversation.ChatMessages.Single(m => m.Role == "assistant").Id);
-        Assert.Equal(query, factory.Calls.Single().Single().Content);
+        Assert.Equal(query, factory.Calls.Single().CurrentMessage);
+        Assert.Equal("You are ImAI, an intelligent portfolio assistant.", factory.Calls.Single().SystemInstructions);
+        Assert.Empty(factory.Calls.Single().RecentMessages);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(new[] { "conversationId", "messageId", "result", "source" }, json.RootElement.EnumerateObject().Select(p => p.Name));
     }
 
     [Fact]
-    public async Task FollowUpKeepsStoredConversationButSendsOnlyCurrentQueryToAi()
+    public async Task FollowUpWithoutSummarySendsOnlyCurrentQueryToAi()
     {
         using var factory = new ConversationHost();
         using var client = await factory.CreateSessionClient();
@@ -52,12 +57,47 @@ public sealed class AiEndpointsTests
         var second = await Send(client, "follow up", first.ConversationId);
         Assert.Equal(first.ConversationId, second.ConversationId);
         Assert.NotEqual(first.MessageId, second.MessageId);
-        Assert.Equal(new[] { "user" }, factory.Calls[1].Select(m => m.Role));
-        Assert.Equal(new[] { "follow up" }, factory.Calls[1].Select(m => m.Content));
+        Assert.Empty(factory.Calls[1].RecentMessages);
+        Assert.Empty(factory.Calls[1].ConversationSummary);
+        Assert.Equal("follow up", factory.Calls[1].CurrentMessage);
         using var scope = factory.Services.CreateScope();
         var conversation = await scope.ServiceProvider.GetRequiredService<ImAiDbContext>().Conversations.Include(c => c.ChatMessages).SingleAsync();
         Assert.Equal(4, conversation.ChatMessages.Count);
+        Assert.Equal(new long[] { 1, 2, 3, 4 }, conversation.ChatMessages.OrderBy(m => m.Sequence).Select(m => m.Sequence));
         Assert.True(conversation.UpdatedAt > conversation.CreatedAt);
+    }
+
+    [Fact]
+    public async Task FollowUpSendsSummaryAndOnlyUnsummarizedMessagesToAi()
+    {
+        using var factory = new ConversationHost();
+        using var client = await factory.CreateSessionClient();
+        var first = await Send(client, "summarized question");
+        await Send(client, "unsummarized question", first.ConversationId);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<ImAiDbContext>();
+            database.ConversationSummaries.Add(new ImAI.Domain.Entities.ConversationSummary
+            {
+                ConversationId = first.ConversationId,
+                Content = "The user is learning about retrieval.",
+                LastSummarizedSequence = 2
+            });
+            await database.SaveChangesAsync();
+        }
+
+        var reply = await Send(client, "current question", first.ConversationId);
+
+        var context = factory.Calls[2];
+        Assert.Equal(first.ConversationId, reply.ConversationId);
+        Assert.Equal("The user is learning about retrieval.", context.ConversationSummary);
+        Assert.Equal("You are ImAI, an intelligent portfolio assistant.", context.SystemInstructions);
+        Assert.Equal(new[] { "user", "assistant" }, context.RecentMessages.Select(message => message.Role));
+        Assert.Equal(new[] { "unsummarized question", ConversationHost.Answer }, context.RecentMessages.Select(message => message.Content));
+        Assert.Equal("current question", context.CurrentMessage);
+        Assert.Empty(context.RetrievedKnowledge);
+        using var finalScope = factory.Services.CreateScope();
+        Assert.Equal(6, await finalScope.ServiceProvider.GetRequiredService<ImAiDbContext>().ChatMessages.CountAsync());
     }
 
     [Fact]
@@ -68,15 +108,17 @@ public sealed class AiEndpointsTests
         var first = await Send(client, "first chat");
         var second = await Send(client, "new chat");
         Assert.NotEqual(first.ConversationId, second.ConversationId);
-        Assert.Single(factory.Calls[1]);
+        Assert.Empty(factory.Calls[1].RecentMessages);
         var continued = await Send(client, "continue first chat", first.ConversationId);
         Assert.Equal(first.ConversationId, continued.ConversationId);
-        Assert.DoesNotContain(factory.Calls[2], message => message.Content == "new chat");
+        Assert.DoesNotContain(factory.Calls[2].RecentMessages, message => message.Content == "new chat");
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ImAiDbContext>();
         Assert.Equal(1, await db.AnonymousSessions.CountAsync());
         Assert.Equal(2, await db.Conversations.CountAsync());
         Assert.Single(await db.Conversations.Select(c => c.SessionId).Distinct().ToListAsync());
+        Assert.All(await db.Conversations.Include(c => c.ChatMessages).ToListAsync(), conversation =>
+            Assert.Equal(1, conversation.ChatMessages.Min(m => m.Sequence)));
     }
 
     [Fact]
@@ -235,7 +277,7 @@ public sealed class AiEndpointsTests
     {
         public const string Answer = "AI answer";
         private readonly string databasePath = Path.Combine(Path.GetTempPath(), $"imai-chat-test-{Guid.NewGuid():N}.db");
-        public List<ChatTurn[]> Calls { get; } = [];
+        public List<ConversationContextDto> Calls { get; } = [];
         public bool Fail { get; set; }
         public bool FailAuthentication { get; set; }
         public bool SynchronizeCalls { get; set; }
@@ -260,11 +302,11 @@ public sealed class AiEndpointsTests
             client.DefaultRequestHeaders.Add("Cookie", session.Headers.GetValues("Set-Cookie").Single().Split(';')[0]);
             return client;
         }
-        public async Task<string> AskAsync(IReadOnlyList<ChatTurn> messages, CancellationToken cancellationToken = default)
+        public async Task<string> AskAsync(ConversationContextDto context, CancellationToken cancellationToken = default)
         {
             lock (Calls)
             {
-                Calls.Add(messages.ToArray());
+                Calls.Add(context);
                 if (SynchronizeCalls && Calls.Count >= 3) bothCallsStarted.TrySetResult();
             }
             if (SynchronizeCalls) await bothCallsStarted.Task.WaitAsync(cancellationToken);

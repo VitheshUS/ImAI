@@ -12,7 +12,7 @@ internal sealed class ConversationStore(ImAiDbContext database) : IConversationS
         await database.Conversations.AsNoTracking().Where(c => c.SessionId == sessionId)
             .OrderByDescending(c => c.UpdatedAt).ThenBy(c => c.Id)
             .Select(c => new ConversationOverview(c.Id,
-                c.ChatMessages.Where(m => m.Role == "user").OrderBy(m => m.CreatedAt).ThenBy(m => m.Id)
+                c.ChatMessages.Where(m => m.Role == "user").OrderBy(m => m.Sequence)
                     .Select(m => m.Content).FirstOrDefault() ?? "New conversation", c.CreatedAt, c.UpdatedAt))
             .ToListAsync(cancellationToken);
 
@@ -34,12 +34,17 @@ internal sealed class ConversationStore(ImAiDbContext database) : IConversationS
 
     public async Task SaveExchangeAsync(Conversation conversation, ChatMessage userMessage, ChatMessage assistantMessage, CancellationToken cancellationToken)
     {
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         if (database.Entry(conversation).State == EntityState.Detached)
             database.Conversations.Add(conversation);
-        database.ChatMessages.AddRange(userMessage, assistantMessage);
         try
         {
+            // Check UpdatedAt concurrency before inserting messages with unique sequences.
+            // Both saves remain atomic and the transaction starts only after the AI call.
             await database.SaveChangesAsync(cancellationToken);
+            database.ChatMessages.AddRange(userMessage, assistantMessage);
+            await database.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
