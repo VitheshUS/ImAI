@@ -4,6 +4,7 @@ using System.Text.Json;
 using ImAI.Api.Cookies;
 using ImAI.Application.Abstractions;
 using ImAI.Application.Chat;
+using ImAI.Application.Common;
 using ImAI.Application.Sessions;
 using ImAI.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
@@ -209,6 +210,20 @@ public sealed class AiEndpointsTests
         Assert.Equal(2, await database.AnonymousSessions.CountAsync());
     }
 
+    [Fact]
+    public async Task MissingAiCredentialsReturn503WithoutExposingCredentialDetails()
+    {
+        using var factory = new ConversationHost { FailAuthentication = true };
+        using var client = await factory.CreateSessionClient();
+        var response = await client.PostAsJsonAsync("/api/ai/chat", new { query = "hello" });
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("AI service authentication is not configured", body);
+        Assert.DoesNotContain("private credential detail", body);
+        using var scope = factory.Services.CreateScope();
+        Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<ImAiDbContext>().Conversations.CountAsync());
+    }
+
     private static async Task<AiChatResponse> Send(HttpClient client, string query, Guid? conversationId = null)
     {
         var response = await client.PostAsJsonAsync("/api/ai/chat", new { query, conversationId });
@@ -222,6 +237,7 @@ public sealed class AiEndpointsTests
         private readonly string databasePath = Path.Combine(Path.GetTempPath(), $"imai-chat-test-{Guid.NewGuid():N}.db");
         public List<ChatTurn[]> Calls { get; } = [];
         public bool Fail { get; set; }
+        public bool FailAuthentication { get; set; }
         public bool SynchronizeCalls { get; set; }
         private readonly TaskCompletionSource bothCallsStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -252,6 +268,7 @@ public sealed class AiEndpointsTests
                 if (SynchronizeCalls && Calls.Count >= 3) bothCallsStarted.TrySetResult();
             }
             if (SynchronizeCalls) await bothCallsStarted.Task.WaitAsync(cancellationToken);
+            if (FailAuthentication) throw new AiServiceUnavailableException("AI service authentication is not configured on the server.", new InvalidOperationException("private credential detail"));
             if (Fail) throw new InvalidOperationException("Test AI failure");
             return Answer;
         }

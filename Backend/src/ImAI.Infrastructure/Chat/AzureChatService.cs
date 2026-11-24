@@ -1,4 +1,6 @@
 using ImAI.Application.Abstractions;
+using ImAI.Application.Common;
+using Azure.Identity;
 using ImAI.Application.Chat;
 using Microsoft.Extensions.AI;
 
@@ -15,7 +17,14 @@ public sealed class AzureChatService(IChatClient chatClient) : IAzureChatService
             "assistant" => ChatRole.Assistant,
             _ => throw new InvalidOperationException("Unsupported conversation message role.")
         }, message.Content)));
-        var response = await chatClient.GetResponseAsync(history, cancellationToken: cancellationToken);
-        return response.Text;
+        try
+        {
+            var response = await chatClient.GetResponseAsync(history, cancellationToken: cancellationToken);
+            return response.Text;
+        }
+        catch (AuthenticationFailedException exception)
+        {
+            throw new AiServiceUnavailableException("AI service authentication is not configured on the server.", exception);
+        }
     }
 }

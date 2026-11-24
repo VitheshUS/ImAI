@@ -1,4 +1,8 @@
 ﻿using ImAI.Application.Abstractions;
+using Azure.Core;
+using Azure.Identity;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.FileProviders;
 using ImAI.Infrastructure;
 using ImAI.Infrastructure.Chat;
 using Microsoft.Extensions.Configuration;
@@ -9,6 +13,44 @@ namespace ImAI.Api.Tests;
 
 public sealed class AzureChatRegistrationTests
 {
+    [Fact]
+    public void DevelopmentUsesCliInsteadOfAnUnintendedVisualStudioIdentity()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IHostEnvironment>(new DevelopmentEnvironment());
+        services.AddInfrastructure(new ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<AzureCliCredential>(provider.GetRequiredService<TokenCredential>());
+        Assert.Single(services, service => service.ServiceType == typeof(TokenCredential));
+        Assert.Single(services, service => service.ServiceType == typeof(IChatClient));
+    }
+
+    [Theory]
+    [InlineData("AzureCli", typeof(AzureCliCredential))]
+    [InlineData("Default", typeof(DefaultAzureCredential))]
+    public void CredentialChoiceIsExplicit(string mode, Type expected)
+    {
+        using var provider = new ServiceCollection().AddInfrastructure(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["AzureOpenAI:Credential"] = mode }).Build()).BuildServiceProvider();
+        Assert.Equal(expected, provider.GetRequiredService<TokenCredential>().GetType());
+    }
+
+    [Fact]
+    public void UnknownCredentialChoiceDoesNotSilentlyFallBack()
+    {
+        using var provider = new ServiceCollection().AddInfrastructure(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["AzureOpenAI:Credential"] = "Wrong" }).Build()).BuildServiceProvider();
+        Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<TokenCredential>());
+    }
+
+    private sealed class DevelopmentEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+        public string ApplicationName { get; set; } = "ImAI.Tests";
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
     [Fact]
     public void ResolvesAzureChatServiceFromApplicationInterface()
     {

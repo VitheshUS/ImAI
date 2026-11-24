@@ -275,6 +275,7 @@ export class RagChatService {
   }
   private errorMessage(error: unknown): string {
     if (error instanceof HttpErrorResponse) {
+      if (error.status === 503) return 'The AI service is unavailable. Please try again later.';
       if (error.status === 401)
         return 'Your session has expired. Reload ImAI to start a new session.';
       if (error.status === 404) return 'This conversation is no longer available in your session.';

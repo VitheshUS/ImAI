@@ -14,6 +14,7 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
 
         var status = exception switch
         {
+            AiServiceUnavailableException => StatusCodes.Status503ServiceUnavailable,
             RequestValidationException => StatusCodes.Status400BadRequest,
             ConversationNotFoundException => StatusCodes.Status404NotFound,
             ConversationConflictException => StatusCodes.Status409Conflict,
@@ -22,8 +23,9 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
         };
         if (status >= 500) logger.LogError(exception, "Unhandled request failure. TraceId: {TraceId}", context.TraceIdentifier);
         await Results.Problem(statusCode: status,
-            title: status >= 500 ? "An unexpected error occurred." : "Request rejected.",
-            detail: exception is RequestValidationException or ConversationNotFoundException or ConversationConflictException ? exception.Message : null)
+            title: exception is AiServiceUnavailableException ? "AI service is unavailable."
+                : status >= 500 ? "An unexpected error occurred." : "Request rejected.",
+            detail: exception is AiServiceUnavailableException or RequestValidationException or ConversationNotFoundException or ConversationConflictException ? exception.Message : null)
             .ExecuteAsync(context);
         return true;
     }

@@ -35,7 +35,7 @@ Uploads accept PDF, DOCX, Markdown, TXT, CSV, and JSON extensions. Files must be
 
 - `AzureOpenAI:Endpoint`: HTTPS Azure OpenAI resource endpoint.
 - `AzureOpenAI:ChatDeployment`: deployment name. The shared SDK client is created lazily, so cloud configuration is needed only when chat is used.
-- Azure credentials: the current implementation retains `AzureCliCredential`; sign in with Azure CLI for live local calls. Managed identity configuration is a future deployment task.
+- Azure credentials: Development uses `AzureCliCredential` to match the signed-in Azure CLI identity. `AzureOpenAI:TenantId` pins the resource tenant, and optional `AzureOpenAI:AzureCliDirectory` adds a portable CLI directory to the application process PATH. Outside Development, the default credential mode is `Default`. Set `AzureOpenAI:Credential` to `AzureCli` or `Default` explicitly to override it.
 - `ConnectionStrings:ImAI`: optional SQLite connection string. Default: `Backend/imai.db` in this checkout, or `imai.db` beside published binaries. `ConnectionStrings__ImAI` overrides both runtime configuration and EF tooling. The design-time factory otherwise uses the default path; it does not load API appsettings files.
 - `Cors:AllowedOrigins`: exact HTTP(S) origins. Defaults: `http://localhost:4200` and `https://localhost:4200`. CORS and POST origin validation share one normalized configuration. Wildcards, credentials, and non-root paths are rejected.
 
@@ -103,3 +103,30 @@ Both message rows and the conversation timestamp are committed together only aft
 - `DELETE /api/conversations/{id}`: deletes the conversation, its messages, and its summary in a single transaction.
 
 All require the session cookie. Unknown and foreign conversation IDs return 404. The frontend loads this list when the chat screen opens, loads messages when a saved conversation is selected, and retains each returned conversation ID independently for follow-up prompts.
+
+## Troubleshooting live AI authentication
+
+If chat fails while session creation succeeds, check the backend terminal exception. The former CLI-only configuration failed with `Azure CLI not installed`. The backend now uses `DefaultAzureCredential`; it still needs a valid Azure identity with access to the OpenAI resource. For Azure CLI, install it and run `az login`, then restart the backend from a new terminal so PATH and credentials are available. Missing Azure credentials produce a 503 Problem Details response with a safe message; detailed credential errors stay in server logs.
+
+## Azure OpenAI 401 investigation (2026-11-24)
+
+The repository DI pipeline reproduced 401 while a raw REST request and the SDK adapter using the CLI credential succeeded. `DefaultAzureCredential` selected `VisualStudioCredential` rather than the CLI identity. Its token tenant was `f8cdef31-a31e-4b4a-93e4-5f571e91255a`, while the working CLI token tenant was `e140db0a-9392-48f3-9a07-3ef59e125f23`. Both requested the Cognitive Services audience; identity selection, not an incorrect scope, caused the observed 401.
+
+Runtime inspection found one `IChatClient` registration and no API user-secrets ID. Endpoint and deployment came from `appsettings.Development.json`, with no environment overrides for those keys in the inspected process. The portable CLI directory was absent from the inherited PATH. Development now explicitly selects `AzureCliCredential`, pins the resource tenant, and supports the configured portable directory without changing the machine PATH. The client explicitly uses API version `2024-10-21` and `AzureOpenAIAudience.AzurePublicCloud`, producing scope `https://cognitiveservices.azure.com/.default`. Non-secret endpoint/deployment/credential/tenant configuration is logged when the lazy client is created.
+
+Verified using the unchanged Azure.AI.OpenAI 2.1.0, Azure.Identity 1.21.0, OpenAI 2.14.0, Microsoft.Extensions.AI.OpenAI 11.0.0 and System.ClientModel 1.15.0 dependency set:
+
+| Isolation layer | Result |
+| --- | --- |
+| AzureCliCredential token acquisition | Succeeded; correct resource tenant and Cognitive Services audience |
+| Raw HTTP with that token | 200 |
+| AzureOpenAIClient binary-content request without adapter | 200 |
+| AzureOpenAIClient strongly typed request without adapter | MissingMethodException for ChatCompletionOptions.get_SerializedAdditionalRawData before HTTP; separate version-compatibility issue |
+| Microsoft.Extensions.AI adapter using CLI | Succeeded |
+| Original DI with DefaultAzureCredential | Visual Studio identity selected; HTTP 401 |
+| Fixed application DI/service pipeline | Succeeded |
+| Actual session-authenticated ImAI HTTP endpoint | First/follow-up prompts 200; same conversation; four persisted messages; diagnostic conversation deleted afterward |
+
+All emitted SDK/REST chat requests targeted `https://aoai-imai-dev.openai.azure.com/openai/deployments/gpt-4.1-mini/chat/completions?api-version=2024-10-21`. No package upgrades were made: the strongly typed overload compatibility problem does not affect the active adapter path and should be addressed separately before using that overload.
+
+The manual tool `dotnet run --project tools/AzureDiagnostics` reproduces the individual layers using existing project references. It makes small live Azure requests (normal inference charges apply), prints configuration provenance, requested scopes, tenant/audience and an identity fingerprint, and never prints access tokens or Authorization header values. The DefaultAzureCredential comparison intentionally exercises the former identity-selection behavior; its failure is not an automated test failure. The tool is excluded from the solution and normal CI tests.

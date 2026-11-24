@@ -1,7 +1,10 @@
 using ImAI.Application.Abstractions;
 using Azure.AI.OpenAI;
 using Azure.Identity;
+using Azure.Core;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using ImAI.Infrastructure.Chat;
 using ImAI.Infrastructure.Persistence;
 using ImAI.Infrastructure.Sessions;
@@ -21,7 +24,34 @@ public static class DependencyInjection
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<IAnonymousSessionService, AnonymousSessionService>();
         services.AddScoped<IConversationStore, ConversationStore>();
-        services.AddSingleton<IChatClient>(_ =>
+        services.AddSingleton<TokenCredential>(provider =>
+        {
+            var development = provider.GetService<IHostEnvironment>()?.IsDevelopment() == true;
+            var mode = configuration["AzureOpenAI:Credential"] ?? (development ? "AzureCli" : "Default");
+            var tenantId = configuration["AzureOpenAI:TenantId"];
+            if (string.Equals(mode, "AzureCli", StringComparison.OrdinalIgnoreCase))
+            {
+                var cliDirectory = configuration["AzureOpenAI:AzureCliDirectory"];
+                if (!string.IsNullOrWhiteSpace(cliDirectory))
+                {
+                    cliDirectory = Path.GetFullPath(cliDirectory);
+                    if (!File.Exists(Path.Combine(cliDirectory, OperatingSystem.IsWindows() ? "az.cmd" : "az")))
+                        throw new InvalidOperationException("AzureOpenAI:AzureCliDirectory must contain the Azure CLI executable.");
+                    var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+                    if (!currentPath.Split(Path.PathSeparator).Contains(cliDirectory, StringComparer.OrdinalIgnoreCase))
+                        Environment.SetEnvironmentVariable("PATH", cliDirectory + Path.PathSeparator + currentPath);
+                }
+                return new AzureCliCredential(new AzureCliCredentialOptions { TenantId = tenantId });
+            }
+            if (!string.Equals(mode, "Default", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("AzureOpenAI:Credential must be AzureCli or Default.");
+            return new DefaultAzureCredential(new DefaultAzureCredentialOptions
+            {
+                TenantId = tenantId,
+                ExcludeManagedIdentityCredential = development
+            });
+        });
+        services.AddSingleton<IChatClient>(provider =>
         {
             var endpoint = configuration["AzureOpenAI:Endpoint"];
             var deployment = configuration["AzureOpenAI:ChatDeployment"];
@@ -29,7 +59,16 @@ public static class DependencyInjection
                 throw new InvalidOperationException("Configure AzureOpenAI:Endpoint with a valid HTTPS endpoint.");
             if (string.IsNullOrWhiteSpace(deployment))
                 throw new InvalidOperationException("Configure AzureOpenAI:ChatDeployment with the Azure deployment name.");
-            return new AzureOpenAIClient(uri, new AzureCliCredential()).GetChatClient(deployment).AsIChatClient();
+            var options = new AzureOpenAIClientOptions(AzureOpenAIClientOptions.ServiceVersion.V2024_10_21)
+            {
+                Audience = AzureOpenAIAudience.AzurePublicCloud
+            };
+            var credential = provider.GetRequiredService<TokenCredential>();
+            provider.GetService<ILogger<AzureChatService>>()?.LogInformation(
+                "Azure OpenAI endpoint={Endpoint}, deployment={Deployment}, credential={Credential}, tenant={TenantId}, apiVersion=2024-10-21",
+                uri.GetLeftPart(UriPartial.Authority), deployment, credential.GetType().Name, configuration["AzureOpenAI:TenantId"]);
+            return new AzureOpenAIClient(uri, credential, options)
+                .GetChatClient(deployment).AsIChatClient();
         });
         services.AddScoped<IAzureChatService, AzureChatService>();
         services.AddScoped<IDocumentStorage, StubDocumentStorage>();
