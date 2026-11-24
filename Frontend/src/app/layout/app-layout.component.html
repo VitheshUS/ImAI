@@ -1,23 +1,26 @@
 <div class="workspace">
-  <aside class="sidebar" [class.mobile-open]="showSidebar()">
+  @if (showSidebar()) {
+    <button
+      class="sidebar-backdrop"
+      aria-label="Close navigation"
+      (click)="showSidebar.set(false)"
+    ></button>
+  }
+  <aside id="workspace-navigation" class="sidebar" [class.mobile-open]="showSidebar()">
     <a class="brand" routerLink="/chat"
-      ><span class="brand-mark">✳</span
-      ><span>Im<span class="cyan">AI</span><small>YOUR KNOWLEDGE. CONNECTED.</small></span></a
+      ><span class="brand-mark" aria-hidden="true">✳</span
+      ><span>Im<span class="cyan">AI</span></span></a
     >
     <button class="new-chat" (click)="startNewChat()">
-      ＋ <span>New conversation</span><kbd>↵</kbd>
+      <span aria-hidden="true">＋</span> New conversation
     </button>
-    <div class="nav-label">WORKSPACE</div>
-    <nav>
-      <a routerLink="/chat" routerLinkActive="active" (click)="showSidebar.set(false)"
-        ><span>◈</span> Chat <small>01</small></a
+    <nav aria-label="Workspace">
+      <a routerLink="/chat" routerLinkActive="active" (click)="showSidebar.set(false)">Chat</a
       ><a routerLink="/documents" routerLinkActive="active" (click)="showSidebar.set(false)"
-        ><span>▤</span> Manage documents <small>{{ documentService.documents().length }}</small></a
+        >Manage documents</a
       >
     </nav>
-    <div class="history-heading nav-label">
-      RECENT CONVERSATIONS <span>{{ chatService.threads().length }}</span>
-    </div>
+    <div class="history-heading">Conversations</div>
     @if (chatService.historyError()) {
       <div class="history-error" role="alert">
         {{ chatService.historyError() }}
@@ -30,8 +33,10 @@
         *ngFor="let thread of chatService.threads()"
         [class.selected]="chatService.activeThreadId() === thread.id"
       >
-        <button (click)="onSelectThread(thread.id)"><span>↳</span>{{ thread.title }}</button
-        ><button
+        <button class="thread-select" (click)="onSelectThread(thread.id)" [title]="thread.title">
+          {{ thread.title }}
+        </button>
+        <button
           class="remove"
           aria-label="Delete conversation"
           [disabled]="chatService.isThreadBusy(thread.id) || thread.loading"
@@ -41,67 +46,58 @@
         </button>
       </div>
     </div>
-    <div class="sidebar-bottom">
-      <div class="knowledge-status">
-        <span class="status-dot"></span> KNOWLEDGE BASE
-        <strong>{{ documentService.readyDocumentsCount() }} documents ready</strong>
-        <div class="status-line"></div>
-        <small>Local preview · simulated retrieval</small>
+    <div class="profile">
+      <span class="avatar">{{
+        authService.currentUser() ? authService.currentUser()!.name.charAt(0).toUpperCase() : 'G'
+      }}</span>
+      <div>
+        <strong>{{ authService.currentUser()?.name || 'Guest explorer' }}</strong
+        ><small>{{ authService.isAuthenticated() ? 'Member workspace' : 'Guest workspace' }}</small>
       </div>
-      <div class="profile">
-        <span class="avatar">{{
-          authService.currentUser() ? authService.currentUser()!.name.charAt(0).toUpperCase() : 'G'
-        }}</span>
-        <div>
-          <strong>{{ authService.currentUser()?.name || 'Guest explorer' }}</strong><small>{{
-            authService.isAuthenticated() ? 'Member workspace' : 'Limited workspace access'
-          }}</small>
-        </div>
-        <button
-          *ngIf="authService.isAuthenticated()"
-          (click)="authService.logout()"
-          title="Sign out"
-        >
-          ↪</button
-        ><a *ngIf="!authService.isAuthenticated()" routerLink="/login" title="Sign in">↗</a>
-      </div>
+      <button
+        *ngIf="authService.isAuthenticated()"
+        (click)="authService.logout()"
+        aria-label="Sign out"
+      >
+        Sign out</button
+      ><a *ngIf="!authService.isAuthenticated()" routerLink="/login">Sign in</a>
     </div>
   </aside>
   <main class="main">
-    <header class="topbar">
-      <div>
-        <button
-          class="menu-toggle"
-          (click)="toggleSidebarVisibility()"
-          aria-label="Toggle navigation"
+    <div class="floating-actions">
+      <button
+        class="floating-menu"
+        (click)="toggleSidebarVisibility()"
+        aria-controls="workspace-navigation"
+        [attr.aria-expanded]="showSidebar()"
+        aria-label="Toggle navigation"
+      >
+        <svg
+          aria-hidden="true"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
         >
-          ☰</button
-        ><span class="workspace-icon">⌘</span> Personal workspace <span class="slash">/</span>
-        <span class="topbar-muted">{{
-          router.url.includes('documents') ? 'Documents' : 'Chat'
-        }}</span>
-      </div>
-      <div class="topbar-right">
-        <span class="demo-label">ImAI</span
-        ><span class="connection"><i class="status-dot"></i> AI workspace</span>
-      </div>
-    </header>
-    <div class="route-content"><router-outlet /></div>
-    <footer class="workspace-footer">
-      <span><i class="status-dot"></i> ImAI SYSTEM <span class="muted">/ AI WORKSPACE</span></span
-      ><span>RETRIEVE. REASON. RESPOND. <b>✧</b></span>
-    </footer>
+          <path d="M4 6h16M4 12h16M4 18h16" />
+        </svg></button
+      ><button class="floating-new" (click)="startNewChat()" aria-label="New conversation">
+        ＋ New chat
+      </button>
+    </div>
+    <div class="route-content" [class.chat-route]="router.url.startsWith('/chat')">
+      <router-outlet />
+    </div>
   </main>
   <aside
     class="citation-drawer"
     *ngIf="chatService.isCitationDrawerOpen() && chatService.activeCitation() as citation"
   >
     <button class="close" (click)="closeDrawer()" aria-label="Close source">×</button>
-    <div class="eyebrow">SOURCE INSPECTOR / {{ citation.index }}</div>
     <h2>{{ citation.documentTitle }}</h2>
-    <span class="pill">Sample citation · page {{ citation.pageNumber }}</span>
+    <p>Page {{ citation.pageNumber }}</p>
     <blockquote>{{ citation.snippet }}</blockquote>
-    <p class="muted">{{ citation.chunkId }}</p>
-    <p class="muted">Sample source from the frontend demo. Live retrieval is not connected.</p>
   </aside>
 </div>

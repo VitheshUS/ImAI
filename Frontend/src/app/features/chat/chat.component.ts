@@ -1,6 +1,5 @@
 import { Component, inject, ViewChild, ElementRef, AfterViewChecked, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RagChatService } from '../../core/services/rag-chat.service';
 import { Citation } from '../../core/models/rag.model';
@@ -8,7 +7,7 @@ import { Citation } from '../../core/models/rag.model';
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss',
 })
@@ -44,14 +43,21 @@ export class ChatComponent implements AfterViewChecked, OnInit {
 
     const query = this.userPrompt;
     this.userPrompt = '';
+    if (this.promptTextarea) this.promptTextarea.nativeElement.style.height = 'auto';
     this.shouldScrollToBottom = true;
 
     await this.chatService.sendMessage(query);
     this.shouldScrollToBottom = true;
   }
 
+  resizeComposer(): void {
+    const textarea = this.promptTextarea.nativeElement;
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 160) + 'px';
+  }
+
   onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       this.onSendMessage();
     }

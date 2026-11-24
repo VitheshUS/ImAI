@@ -1,44 +1,26 @@
 <div class="chat-page">
-  <div class="chat-toolbar">
-    <div>
-      <span class="eyebrow">INTELLIGENCE WORKSPACE</span>
-      <h1>
-        {{
-          chatService.activeThread()?.messages?.length
-            ? 'Your conversation'
-            : 'A little curiosity. Infinite possibilities.'
-        }}
-      </h1>
-    </div>
-    <span class="pill"><i class="status-dot"></i> AI chat</span>
-  </div>
-  <div class="messages" #messagesContainer aria-live="polite">
+  <h1 class="sr-only">Chat with ImAI</h1>
+  <div
+    class="messages"
+    #messagesContainer
+    role="log"
+    aria-live="polite"
+    aria-label="Conversation"
+    [class.empty]="!chatService.activeThread()?.messages?.length && !chatService.isLoading()"
+  >
     @if (chatService.isLoading()) {
-      <p class="generating">Loading conversation…</p>
+      <p class="loading-conversation">Loading conversation…</p>
     } @else if (!chatService.activeThread()?.messages?.length) {
       <section class="welcome">
-        <div class="orb"><span>✳</span><i class="orb-point"></i></div>
-        <div class="eyebrow">THINK BEYOND THE SEARCH BAR</div>
-        <h2>Your knowledge,<br /><span>one conversation away.</span></h2>
-        <p>
-          Ask a question and explore ideas with ImAI.<br />Your conversations are saved in your
-          session.
-        </p>
+        <span class="welcome-mark" aria-hidden="true">✳</span>
+        <h2>What's on your mind?</h2>
+        <p>Start a conversation with ImAI.</p>
         <div class="suggestions">
           <button
-            *ngFor="let question of starterQuestions; let i = index"
+            *ngFor="let question of starterQuestions | slice: 0 : 2"
             (click)="selectStarterQuestion(question)"
           >
-            <span class="suggestion-icon">{{ ['⌕', '▤', '◇', '↗'][i] }}</span><strong>{{
-              [
-                'Explore your knowledge',
-                'Understand the details',
-                'Connect the dots',
-                'Get the bigger picture',
-              ][i]
-            }}</strong
-            ><span>{{ question }}</span
-            ><b>↗</b>
+            {{ question }}
           </button>
         </div>
       </section>
@@ -47,13 +29,18 @@
         <article
           *ngFor="let message of chatService.activeThread()?.messages"
           [class.user]="message.role === 'user'"
+          [class.assistant]="message.role !== 'user'"
+          [attr.aria-label]="message.role === 'user' ? 'Your message' : 'ImAI response'"
         >
-          <div class="message-avatar">{{ message.role === 'user' ? 'U' : '✳' }}</div>
+          @if (message.role !== 'user') {
+            <span class="message-avatar" aria-hidden="true">✳</span>
+          }
           <div class="message-body">
             <div class="message-meta">
-              {{ message.role === 'user' ? 'You' : 'ImAI'
-              }}<small>{{ message.timestamp | date: 'shortTime' }}</small
-              ><span *ngIf="message.role === 'assistant'">AI RESPONSE</span>
+              <span>{{ message.role === 'user' ? 'You' : 'ImAI' }}</span
+              ><time [attr.datetime]="message.timestamp.toISOString()">{{
+                message.timestamp | date: 'shortTime'
+              }}</time>
             </div>
             <div class="message-text">{{ message.content }}</div>
             @if (message.delivery === 'failed') {
@@ -70,14 +57,20 @@
                 *ngFor="let citation of message.citations"
                 (click)="onInspectCitation(citation)"
               >
-                <span>{{ citation.index }}</span>{{ citation.documentTitle }} ↗
+                <span>{{ citation.index }}</span
+                >{{ citation.documentTitle }}
               </button>
             </div>
           </div>
         </article>
-        <div class="generating" *ngIf="chatService.isGenerating()">
-          <span class="status-dot"></span> ImAI is responding…
-        </div>
+        @if (chatService.isGenerating()) {
+          <div class="typing-indicator" aria-label="ImAI is responding">
+            <span class="message-avatar" aria-hidden="true">✳</span>
+            <div class="typing-bubble">
+              <i></i><i></i><i></i><span class="sr-only">ImAI is responding</span>
+            </div>
+          </div>
+        }
       </div>
     }
   </div>
@@ -92,37 +85,31 @@
         }
       </div>
     }
-    <div class="context-row">
-      <span>DIRECT AI CHAT</span><span>No document or conversation context is sent.</span>
-    </div>
     <div class="composer">
       <textarea
         #promptTextarea
         [(ngModel)]="userPrompt"
+        (input)="resizeComposer()"
         (keydown)="onKeyDown($event)"
         placeholder="Message ImAI…"
         aria-label="Message ImAI"
-        rows="2"
+        aria-describedby="composer-help"
+        rows="1"
       ></textarea>
-      <div class="composer-actions">
-        <a routerLink="/documents" title="Manage documents">＋ <span>Add knowledge</span></a>
-        <div>
-          <small>Enter to send <span>·</span> Shift + Enter for a new line</small
-          ><button
-            (click)="onSendMessage()"
-            [disabled]="
-              !userPrompt.trim() ||
-              chatService.isGenerating() ||
-              chatService.isLoading() ||
-              chatService.activeThread()?.messagesLoaded === false
-            "
-            aria-label="Send message"
-          >
-            ↑
-          </button>
-        </div>
-      </div>
+      <button
+        class="send-message"
+        (click)="onSendMessage()"
+        [disabled]="
+          !userPrompt.trim() ||
+          chatService.isGenerating() ||
+          chatService.isLoading() ||
+          chatService.activeThread()?.messagesLoaded === false
+        "
+        aria-label="Send message"
+      >
+        Send
+      </button>
     </div>
-    <p class="composer-hint">AI responses may be inaccurate. Verify important information.</p>
+    <span id="composer-help" class="sr-only">Enter to send. Shift and Enter for a new line.</span>
   </div>
 </div>
