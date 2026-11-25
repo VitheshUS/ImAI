@@ -49,7 +49,7 @@ public sealed class AiEndpointsTests
     }
 
     [Fact]
-    public async Task FollowUpWithoutSummarySendsOnlyCurrentQueryToAi()
+    public async Task FollowUpWithoutSummarySendsStoredHistoryAndCurrentQueryToAi()
     {
         using var factory = new ConversationHost();
         using var client = await factory.CreateSessionClient();
@@ -57,7 +57,9 @@ public sealed class AiEndpointsTests
         var second = await Send(client, "follow up", first.ConversationId);
         Assert.Equal(first.ConversationId, second.ConversationId);
         Assert.NotEqual(first.MessageId, second.MessageId);
-        Assert.Empty(factory.Calls[1].RecentMessages);
+        Assert.Equal(new[] { "user", "assistant" }, factory.Calls[1].RecentMessages.Select(message => message.Role));
+        Assert.Equal(new[] { "hello", ConversationHost.Answer }, factory.Calls[1].RecentMessages.Select(message => message.Content));
+        Assert.DoesNotContain(factory.Calls[1].RecentMessages, message => message.Content == "follow up");
         Assert.Empty(factory.Calls[1].ConversationSummary);
         Assert.Equal("follow up", factory.Calls[1].CurrentMessage);
         using var scope = factory.Services.CreateScope();
@@ -65,6 +67,7 @@ public sealed class AiEndpointsTests
         Assert.Equal(4, conversation.ChatMessages.Count);
         Assert.Equal(new long[] { 1, 2, 3, 4 }, conversation.ChatMessages.OrderBy(m => m.Sequence).Select(m => m.Sequence));
         Assert.True(conversation.UpdatedAt > conversation.CreatedAt);
+        Assert.Equal(0, await scope.ServiceProvider.GetRequiredService<ImAiDbContext>().ConversationSummaries.CountAsync());
     }
 
     [Fact]
@@ -111,6 +114,7 @@ public sealed class AiEndpointsTests
         Assert.Empty(factory.Calls[1].RecentMessages);
         var continued = await Send(client, "continue first chat", first.ConversationId);
         Assert.Equal(first.ConversationId, continued.ConversationId);
+        Assert.Equal(new[] { "first chat", ConversationHost.Answer }, factory.Calls[2].RecentMessages.Select(message => message.Content));
         Assert.DoesNotContain(factory.Calls[2].RecentMessages, message => message.Content == "new chat");
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ImAiDbContext>();

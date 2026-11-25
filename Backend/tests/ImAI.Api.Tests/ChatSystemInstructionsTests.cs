@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ImAI.Infrastructure.Chat;
 using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ImAI.Api.Tests;
 
@@ -44,7 +45,7 @@ public sealed class ChatSystemInstructionsTests
     {
         var client = new RecordingChatClient();
         var context = new ConversationContextDto("Instructions", "Summary", [new(role, "Content")], [], "Question");
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new AzureChatService(client).AskAsync(context));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new AzureChatService(client, NullLogger<AzureChatService>.Instance).AskAsync(context));
         Assert.Empty(client.Messages);
     }
 
@@ -57,7 +58,7 @@ public sealed class ChatSystemInstructionsTests
             [new("user", "Previous question"), new("assistant", "Previous answer")],
             ["Retrieved passage"], "Current question");
 
-        await new AzureChatService(client).AskAsync(context);
+        await new AzureChatService(client, NullLogger<AzureChatService>.Instance).AskAsync(context);
 
         Assert.Equal(new[] { ChatRole.System, ChatRole.User, ChatRole.User, ChatRole.Assistant, ChatRole.User },
             client.Messages.Select(message => message.Role));

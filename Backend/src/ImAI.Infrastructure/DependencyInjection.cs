@@ -20,6 +20,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddLogging();
         services.AddDbContext<ImAiDbContext>(options => options.UseSqlite(
             configuration.GetConnectionString("ImAI") ?? SqliteDatabase.DefaultConnectionString));
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);

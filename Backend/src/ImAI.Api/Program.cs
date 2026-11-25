@@ -6,12 +6,15 @@ using ImAI.Infrastructure;
 using ImAI.Infrastructure.Persistence;
 using ImAI.SqliteExplorer;
 using Microsoft.EntityFrameworkCore;
+using ImAI.Api.Logging;
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddFileLogging(builder.Configuration, builder.Environment);
 builder.Services.AddApplication().AddInfrastructure(builder.Configuration).AddApi(builder.Configuration);
 // Temporary local development tool; remove this block and MapSqliteExplorer to detach it.
 if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("SqliteExplorer:Enabled"))
     builder.Services.AddSqliteExplorer(provider => provider.GetRequiredService<ImAiDbContext>().Database.GetConnectionString()!);
 var app = builder.Build();
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseCors("Frontend");

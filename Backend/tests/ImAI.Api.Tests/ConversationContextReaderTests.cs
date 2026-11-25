@@ -42,16 +42,25 @@ public sealed class ConversationContextReaderTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task NoSummaryReturnsNullEvenWhenMessagesExist()
+    public async Task NoSummaryReturnsAllStoredMessagesWithoutCreatingASummary()
     {
         var conversation = await SeedAsync(null);
-        Assert.Null(await reader.ReadAsync(conversation.SessionId, conversation.Id, "next question"));
+        var context = await reader.ReadAsync(conversation.SessionId, conversation.Id, "next question");
+        Assert.NotNull(context);
+        Assert.Empty(context.ConversationSummary);
+        Assert.Equal(Instructions, context.SystemInstructions);
+        Assert.Equal("next question", context.CurrentMessage);
+        Assert.Empty(context.RetrievedKnowledge);
+        Assert.Equal(new[] { "Message 1", "Message 2", "Message 3", "Message 4" }, context.RecentMessages.Select(message => message.Content));
+        Assert.Equal(new[] { "user", "assistant", "user", "assistant" }, context.RecentMessages.Select(message => message.Role));
+        Assert.Empty(database.ChangeTracker.Entries());
+        Assert.Equal(0, await database.ConversationSummaries.CountAsync());
     }
 
     [Theory]
     [InlineData(0)]
-    [InlineData(2)]
-    [InlineData(4)]
+    [InlineData(2L)]
+    [InlineData(4L)]
     public async Task ProjectsOnlyMessagesAfterSummaryBoundaryInSequenceOrder(long boundary)
     {
         var conversation = await SeedAsync(boundary);
@@ -79,22 +88,26 @@ public sealed class ConversationContextReaderTests : IAsyncLifetime
         Assert.Empty(database.ChangeTracker.Entries());
     }
 
-    [Fact]
-    public async Task UnknownAndOtherSessionsConversationsReturnNull()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(2L)]
+    public async Task UnknownAndOtherSessionsConversationsReturnNull(long? boundary)
     {
-        var conversation = await SeedAsync(2);
+        var conversation = await SeedAsync(boundary);
         Assert.Null(await reader.ReadAsync(Guid.NewGuid(), conversation.Id, "question"));
         Assert.Null(await reader.ReadAsync(conversation.SessionId, Guid.NewGuid(), "question"));
     }
 
-    [Fact]
-    public async Task SummaryWithNoMessagesStillReturnsContext()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(4L)]
+    public async Task ConversationWithNoMessagesStillReturnsContext(long? boundary)
     {
-        var conversation = await SeedAsync(4);
+        var conversation = await SeedAsync(boundary);
         await database.ChatMessages.ExecuteDeleteAsync();
         var context = await reader.ReadAsync(conversation.SessionId, conversation.Id, "question");
         Assert.NotNull(context);
-        Assert.Equal("Saved summary", context.ConversationSummary);
+        Assert.Equal(boundary.HasValue ? "Saved summary" : string.Empty, context.ConversationSummary);
         Assert.Empty(context.RecentMessages);
     }
 

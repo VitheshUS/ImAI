@@ -5,6 +5,8 @@ using ImAI.Application.Dtos;
 using ImAI.Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace ImAI.Application.Chat;
 
@@ -15,11 +17,20 @@ public sealed class SendChatQueryHandler(
     IConversationStore conversations,
     IConversationContextReader contextReader,
     IOptions<ConversationContextOptions> options,
-    TimeProvider clock)
+    TimeProvider clock,
+    ILogger<SendChatQueryHandler> logger)
     : IRequestHandler<SendChatQuery, AiChatResponse>
 {
     public async Task<AiChatResponse> Handle(SendChatQuery request, CancellationToken cancellationToken)
     {
+        using var operationScope = logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["ChatOperationId"] = Guid.NewGuid(),
+            ["SessionId"] = request.SessionId
+        });
+        var started = Stopwatch.GetTimestamp();
+        logger.LogInformation(new EventId(2000, "ChatRequestReceived"),
+            "Chat request received for {RequestedConversationId}: {Query}", request.ConversationId, request.Query);
         if (string.IsNullOrWhiteSpace(request.Query))
             throw new RequestValidationException("Query is required.");
         if (request.ConversationId == Guid.Empty)
@@ -33,11 +44,17 @@ public sealed class SendChatQueryHandler(
                 ?? throw new ConversationNotFoundException()
             : new Conversation { Id = Guid.NewGuid(), SessionId = request.SessionId, CreatedAt = now, UpdatedAt = now };
 
+        using var conversationScope = logger.BeginScope(new Dictionary<string, object?> { ["ConversationId"] = conversation.Id });
+        logger.LogInformation(new EventId(2001, "ConversationResolved"),
+            "Conversation resolved; new conversation: {IsNewConversation}", request.ConversationId is null);
         var history = conversation.ChatMessages.OrderBy(message => message.Sequence).ToArray();
         var userSequence = checked((history.Length == 0 ? 0 : history[^1].Sequence) + 1);
         var userCreatedAt = history.Length == 0 || now > history[^1].CreatedAt ? now : history[^1].CreatedAt.AddTicks(1);
-        var context = await contextReader.ReadAsync(request.SessionId, conversation.Id, request.Query, cancellationToken)
-            ?? new ConversationContextDto(options.Value.SystemInstructions, string.Empty, [], [], request.Query);
+        var context = request.ConversationId is null
+            ? new ConversationContextDto(options.Value.SystemInstructions, string.Empty, [], [], request.Query)
+            : await contextReader.ReadAsync(request.SessionId, conversation.Id, request.Query, cancellationToken)
+                ?? throw new ConversationNotFoundException();
+        logger.LogInformation(new EventId(2002, "ChatContextConstructed"), "Chat context constructed: {@Context}", context);
         var result = await chatService.AskAsync(context, cancellationToken);
         var replyTime = clock.GetUtcNow().UtcDateTime;
         var assistantCreatedAt = replyTime > userCreatedAt ? replyTime : userCreatedAt.AddTicks(1);
@@ -62,6 +79,10 @@ public sealed class SendChatQueryHandler(
         conversation.UpdatedAt = assistantCreatedAt;
         // Persist both messages together, only after generation succeeds.
         await conversations.SaveExchangeAsync(conversation, userMessage, assistantMessage, cancellationToken);
+        logger.LogInformation(new EventId(2003, "ChatExchangeSaved"),
+            "Chat exchange saved: user message {UserMessageId} sequence {UserSequence}, assistant message {MessageId} sequence {AssistantSequence}; completed in {ElapsedMilliseconds} ms",
+            userMessage.Id, userMessage.Sequence, assistantMessage.Id, assistantMessage.Sequence,
+            Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return new(conversation.Id, assistantMessage.Id, result, []);
     }
 }

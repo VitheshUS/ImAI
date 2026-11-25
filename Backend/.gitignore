@@ -3,3 +3,6 @@
 .vs/
 TestResults/
 *.user
+**/logs/
+*.jsonl
+*.log

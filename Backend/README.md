@@ -27,7 +27,7 @@ Open `https://localhost:7106/swagger` in Development. Trust the local certificat
 
 Create a session before calling protected endpoints. Browser clients attach the cookie automatically; use `withCredentials: true` in Angular HttpClient or `credentials: 'include'` in fetch. Swagger's same-origin requests also use the cookie. HTTP examples are in `src/ImAI.Api/ImAI.Api.http`.
 
-Queries must contain non-whitespace text. Omitting or sending null `conversationId` starts a new conversation under the authenticated session. Reuse the returned ID on subsequent prompts to continue that conversation. A supplied ID must be non-empty and belong to the current session; unknown and foreign IDs return 404. Every successful exchange saves a user message and an assistant message. The returned `messageId` is the saved assistant message ID. Earlier messages are available for display, but only the current user query is sent to AI in this phase. `source` remains empty until retrieval is integrated.
+Queries must contain non-whitespace text. Omitting or sending null `conversationId` starts a new conversation under the authenticated session. Reuse the returned ID on subsequent prompts to continue that conversation. A supplied ID must be non-empty and belong to the current session; unknown and foreign IDs return 404. Every successful exchange saves a user message and an assistant message. The returned `messageId` is the saved assistant message ID. Follow-ups send stored history after the optional summary's sequence cutoff, together with the current query. `source` remains empty until retrieval is integrated.
 
 Uploads accept PDF, DOCX, Markdown, TXT, CSV, and JSON extensions. Files must be non-empty and at most 50 MiB. The 51 MiB server request limit includes multipart overhead and derives from the same file-size constant. Extension checks do not inspect document contents.
 
@@ -41,6 +41,28 @@ Uploads accept PDF, DOCX, Markdown, TXT, CSV, and JSON extensions. Files must be
 - `Cors:AllowedOrigins`: exact HTTP(S) origins. Defaults: `http://localhost:4200` and `https://localhost:4200`. CORS and POST origin validation share one normalized configuration. Wildcards, credentials, and non-root paths are rejected.
 
 Use the same site and scheme for frontend and API with SameSite=Lax cookies; different HTTPS localhost ports are supported. The frontend initializes its session and connects chat, conversation history, and conversation deletion to this API. Document management retains its frontend demo implementation.
+
+## File logging
+
+`ILogger<T>` events are written to the console and two separate sets of rolling JSON Lines files under `src/ImAI.Api/logs/` when running from this checkout:
+
+- `ai-chat-YYYYMMDD.jsonl`: chat requests, constructed context, actual AI messages, AI responses, AI errors/cancellations, and saved chat exchanges. Events from `ImAI.Application.Chat` and `ImAI.Infrastructure.Chat` are routed here.
+- `app-YYYYMMDD.jsonl`: HTTP request status/timings, database operations, startup, global exception handling, and other application/framework events. Chat payload events are excluded from this file. HTTP trace IDs still connect the general request status to its AI events.
+
+Each event is routed to one file set, with no duplication between the sets. Files roll daily or at 10 MiB; the latest 14 files are retained independently for each set. Files are flushed on each event and on host disposal. The file provider is registered through DI and does not use a global static logger. Existing `imai-*.jsonl` files are historical logs; new events use the split files after restarting the backend.
+
+`Logging:File` in `appsettings.json` configures `Enabled`, `Path` (application logs), `AiChatPath` (AI chat logs), `FileSizeLimitBytes`, and `RetainedFileCountLimit`. Relative paths resolve against the API content root; absolute paths are supported. The two paths must be different. Environment overrides use keys such as `Logging__File__Path` and `Logging__File__AiChatPath`. Existing `Logging:LogLevel` settings control both console and file output. Log files are excluded from Git.
+
+Each HTTP request receives a logging scope with `TraceId`, `RequestId`, method, and path; its completion records status and elapsed time, including errors handled by the global exception handler. A chat adds `ChatOperationId`, `SessionId`, and the resolved `ConversationId`. Follow an exchange using these structured properties and `EventId.Name`:
+
+1. `ChatRequestReceived`: incoming prompt and requested conversation ID.
+2. `ConversationResolved`: resolved conversation and whether it is new.
+3. `ChatContextConstructed`: full context DTO, including instructions, summary, recent messages, knowledge, and current message.
+4. `AiRequestSending`: actual role/content messages passed to `IChatClient`, in order.
+5. `AiResponseReceived`: full returned text, model/response IDs when supplied, and elapsed time; `AiRequestFailed` records exceptions and `AiRequestCancelled` records cancellation.
+6. `ChatExchangeSaved`: persisted message IDs, sequences, and total elapsed time. This appears only after successful persistence.
+
+Each file line is one JSON event; prompt/response newlines are escaped inside JSON properties. Full chat content is intentionally logged. Cookies, authorization headers, session tokens, and Azure access tokens are not included in application log payloads. These logs show the messages provided to the SDK, not raw HTTP authentication headers or transport bodies. Server error exceptions continue to be logged by the global exception handler.
 
 ## Session behavior
 
@@ -114,11 +136,11 @@ Both message rows and the conversation timestamp are committed together only aft
 }
 ```
 
-The reader projects directly from the unique conversation summary and related messages into DTOs using an untracked EF query. It includes only messages with `Sequence > LastSummarizedSequence`, in ascending sequence order. If there is no summary, or the conversation is unknown or belongs to another session, it returns `null`. A summary with no later messages still returns a context with an empty `recentMessages` list. `currentMessage` is supplied by the caller and remains separate from stored history; `retrievedKnowledge` is an empty string list until retrieval is implemented.
+The reader projects directly from the session-owned conversation and related messages into DTOs using untracked EF queries. It reads the optional summary/cutoff first and then the ordered messages, avoiding a collection projection that requires SQL APPLY on SQLite. Without a summary, `conversationSummary` is empty and the cutoff is zero, so all existing messages are returned. With a summary, it includes only messages with `Sequence > LastSummarizedSequence`. Messages are always in ascending sequence order. Only unknown conversations or those belonging to another session return `null`. A conversation with no messages after the cutoff still returns context with an empty `recentMessages` list. `currentMessage` is supplied by the caller and remains separate from stored history; `retrievedKnowledge` is an empty string list until retrieval is implemented.
 
 Message sequences start at 1 independently for each conversation and increase by one per message (user, then assistant). A unique `(ConversationId, Sequence)` index enforces uniqueness. The sequence migration backfills existing rows in `CreatedAt`, then `Id` order before creating the index. Run the database update command above for existing databases.
 
-The chat handler calls the reader before generation and passes `ConversationContextDto` to `IAzureChatService`. If no summary exists, it builds a context with configured instructions, empty summary/history/knowledge, and the current query, preserving the reader's no-summary rule. The Azure adapter sends the configured system instructions, optional JSON summary/knowledge reference data as a user message, recent messages with their actual user/assistant roles, then the current prompt exactly once. Reference data is not promoted to system instructions. The current exchange is saved only after generation succeeds, so it is not duplicated in recent history. The reader does not create or update summaries; automatic summarization and knowledge retrieval are still deferred.
+For existing conversations, the chat handler calls the reader before generation and passes `ConversationContextDto` to `IAzureChatService`; a missing conversation is rejected rather than silently replaced with empty history. For a new, unsaved conversation it builds a context with configured instructions and the current query. The Azure adapter sends the configured system instructions, optional JSON summary/knowledge reference data as a user message, recent messages with their actual user/assistant roles, then the current prompt exactly once. Reference data is not promoted to system instructions. The current exchange is saved only after generation succeeds, so it is not duplicated in recent history. The reader does not create or update summaries; automatic summarization and knowledge retrieval are still deferred.
 
 ## Temporary SQLite explorer
 
