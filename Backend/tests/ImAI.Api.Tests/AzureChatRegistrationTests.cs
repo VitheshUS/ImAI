@@ -3,7 +3,7 @@ using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.FileProviders;
-using ImAI.Infrastructure;
+using ImAI.Infrastructure.DependencyInjection;
 using ImAI.Infrastructure.Chat;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.AI;

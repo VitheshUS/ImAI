@@ -7,6 +7,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ImAI.Infrastructure.Chat;
+using ImAI.Infrastructure.Messaging.ConversationSummaries;
 using ImAI.Infrastructure.Persistence;
 using ImAI.Infrastructure.Sessions;
 using Microsoft.EntityFrameworkCore;
@@ -15,13 +16,14 @@ using ImAI.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using System.Globalization;
-namespace ImAI.Infrastructure;
+namespace ImAI.Infrastructure.DependencyInjection;
 
-public static class DependencyInjection
+public static class InfrastructureServiceCollectionExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddLogging();
+        services.AddConversationSummaryMessaging(configuration);
         services.AddDbContext<ImAiDbContext>(options => options.UseSqlite(
             configuration.GetConnectionString("ImAI") ?? SqliteDatabase.DefaultConnectionString));
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);

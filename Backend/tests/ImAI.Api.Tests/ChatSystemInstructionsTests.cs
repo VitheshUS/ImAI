@@ -1,7 +1,7 @@
 using ImAI.Application.Abstractions;
 using ImAI.Application.Dtos;
 using ImAI.Application.Configuration;
-using ImAI.Infrastructure;
+using ImAI.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

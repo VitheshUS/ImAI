@@ -12,6 +12,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using ImAI.Infrastructure.Chat;
+using ImAI.Application.Dtos.Events;
+using System.Threading.Channels;
 
 namespace ImAI.Api.Tests;
 
@@ -114,7 +116,7 @@ public sealed class FileLoggingTests
     }
 
     [Fact]
-    public async Task MissingDeferredSummaryPublisherIsLoggedWithoutFailingTheSavedChat()
+    public async Task SummaryRequestIsEnqueuedAndLoggedAfterTheChatIsSaved()
     {
         await using var host = new LoggingHost(kLimit: 1);
         using var client = await host.CreateSessionClient();
@@ -123,13 +125,43 @@ public sealed class FileLoggingTests
 
         Assert.Equal(LoggingHost.Answer, response.Result);
         var events = host.ReadEvents("ai-chat-*.jsonl");
-        var failed = Assert.Single(events, entry => EventName(entry) == "ConversationSummaryPublishFailed");
-        Assert.Equal(0, failed.GetProperty("LastSummarizedSequence").GetInt64());
+        var published = Assert.Single(events, entry => EventName(entry) == "ConversationSummaryPublishAttempt");
+        Assert.True(published.GetProperty("Accepted").GetBoolean());
+        Assert.Equal(0, published.GetProperty("LastSummarizedSequence").GetInt64());
+        Assert.DoesNotContain(events, entry => EventName(entry) == "ConversationSummaryPublishFailed");
         Assert.DoesNotContain(events, entry => EventName(entry) == "AiRequestFailed");
         using var scope = host.Services.CreateScope();
         var database = scope.ServiceProvider.GetRequiredService<ImAiDbContext>();
         Assert.Equal(2, await database.ChatMessages.CountAsync());
         Assert.Equal(0, await database.ConversationSummaries.CountAsync());
+        var reader = host.Services.GetRequiredService<ChannelReader<ConversationSummaryRequestedEvent>>();
+        Assert.True(reader.TryRead(out var summaryEvent));
+        Assert.NotNull(summaryEvent);
+        Assert.Equal(response.ConversationId, summaryEvent.ConversationId);
+        Assert.Equal((await database.Conversations.SingleAsync()).SessionId, summaryEvent.SessionId);
+        Assert.Equal(0, summaryEvent.LastSummarizedSequence);
+        Assert.False(reader.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task FullSummaryQueueDropsTheNewEventAndKeepsChatSuccessful()
+    {
+        await using var host = new LoggingHost(kLimit: 1, queueCapacity: 1);
+        using var client = await host.CreateSessionClient();
+        var first = await Send(client, "First question");
+
+        var second = await Send(client, "Second question").WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(LoggingHost.Answer, second.Result);
+        var attempts = host.ReadEvents("ai-chat-*.jsonl").Where(entry => EventName(entry) == "ConversationSummaryPublishAttempt").ToArray();
+        Assert.Equal(new[] { true, false }, attempts.Select(entry => entry.GetProperty("Accepted").GetBoolean()));
+        var reader = host.Services.GetRequiredService<ChannelReader<ConversationSummaryRequestedEvent>>();
+        Assert.True(reader.TryRead(out var summaryEvent));
+        Assert.NotNull(summaryEvent);
+        Assert.Equal(first.ConversationId, summaryEvent.ConversationId);
+        Assert.False(reader.TryRead(out _));
+        using var scope = host.Services.CreateScope();
+        Assert.Equal(4, await scope.ServiceProvider.GetRequiredService<ImAiDbContext>().ChatMessages.CountAsync());
     }
 
     [Fact]
@@ -182,7 +214,7 @@ public sealed class FileLoggingTests
         return (await response.Content.ReadFromJsonAsync<AiChatResponse>())!;
     }
 
-    private sealed class LoggingHost(bool failAi = false, bool enabled = true, string logLevel = "Information", long kLimit = 10) : WebApplicationFactory<Program>
+    private sealed class LoggingHost(bool failAi = false, bool enabled = true, string logLevel = "Information", long kLimit = 10, int queueCapacity = 100) : WebApplicationFactory<Program>
     {
         public const string Answer = "AI answer\nwith \"quotes\".";
         private readonly string directory = Path.Combine(Path.GetTempPath(), $"imai-logging-test-{Guid.NewGuid():N}");
@@ -196,6 +228,7 @@ public sealed class FileLoggingTests
                 ["ConnectionStrings:ImAI"] = $"Data Source={Path.Combine(directory, "test.db")};Pooling=False",
                 ["Logging:File:Enabled"] = enabled.ToString(),
                 ["ConversationSummary:KLimit"] = kLimit.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["ConversationSummary:Queue:Capacity"] = queueCapacity.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["Logging:LogLevel:Default"] = logLevel,
                 ["Logging:File:Path"] = Path.Combine(directory, "app-.jsonl"),
                 ["Logging:File:AiChatPath"] = Path.Combine(directory, "ai-chat-.jsonl")

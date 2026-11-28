@@ -1,6 +1,6 @@
 using ImAI.Application.Abstractions;
 using ImAI.Domain.Entities;
-using ImAI.Infrastructure;
+using ImAI.Infrastructure.DependencyInjection;
 using ImAI.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;

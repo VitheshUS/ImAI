@@ -3,8 +3,9 @@ using Serilog;
 using Serilog.Extensions.Logging;
 using Serilog.Formatting.Compact;
 using Serilog.Events;
+using ImAI.Api.Logging;
 
-namespace ImAI.Api.Logging;
+namespace ImAI.Api.DependencyInjection;
 
 public static class FileLoggingExtensions
 {

@@ -12,7 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ImAI.Application.Abstractions;
 using ImAI.Application.Dtos;
-using ImAI.Infrastructure;
+using ImAI.Infrastructure.DependencyInjection;
 
 using var identityEvents = new IdentityEvents();
 using var httpEvents = DiagnosticListener.AllListeners.Subscribe(new HttpEvents());

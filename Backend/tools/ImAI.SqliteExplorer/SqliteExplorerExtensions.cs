@@ -3,19 +3,12 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace ImAI.SqliteExplorer;
 
 public static class SqliteExplorerExtensions
 {
-    public static IServiceCollection AddSqliteExplorer(this IServiceCollection services, Func<IServiceProvider, string> connectionString)
-    {
-        services.AddScoped<ISqliteExplorer>(provider => new SqliteExplorer(connectionString(provider)));
-        return services;
-    }
-
     public static WebApplication MapSqliteExplorer(this WebApplication app)
     {
         if (!app.Environment.IsDevelopment() || !app.Configuration.GetValue<bool>("SqliteExplorer:Enabled")) return app;

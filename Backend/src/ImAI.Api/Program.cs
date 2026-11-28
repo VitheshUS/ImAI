@@ -1,12 +1,12 @@
-using ImAI.Api;
+using ImAI.Api.DependencyInjection;
 using ImAI.Api.Middleware;
 using ImAI.Api.Endpoints;
-using ImAI.Application;
-using ImAI.Infrastructure;
+using ImAI.Application.DependencyInjection;
+using ImAI.Infrastructure.DependencyInjection;
 using ImAI.Infrastructure.Persistence;
 using ImAI.SqliteExplorer;
 using Microsoft.EntityFrameworkCore;
-using ImAI.Api.Logging;
+using ImAI.SqliteExplorer.DependencyInjection;
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFileLogging(builder.Configuration, builder.Environment);
 builder.Services.AddApplication().AddInfrastructure(builder.Configuration).AddApi(builder.Configuration);

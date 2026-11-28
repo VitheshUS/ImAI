@@ -1,5 +1,5 @@
 using ImAI.Application.Configuration;
-using ImAI.Infrastructure;
+using ImAI.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

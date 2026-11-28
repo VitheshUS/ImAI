@@ -1,4 +1,4 @@
-using ImAI.Application;
+using ImAI.Application.DependencyInjection;
 using ImAI.Application.Abstractions.Messaging;
 using ImAI.Application.Common;
 using ImAI.Application.ConversationSummaries;

@@ -7,9 +7,9 @@ using ImAI.Application.Documents;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Routing;
-namespace ImAI.Api;
+namespace ImAI.Api.DependencyInjection;
 
-public static class DependencyInjection
+public static class ApiServiceCollectionExtensions
 {
     private const long MaxRequestBodySize = ReceiveDocumentHandler.MaxFileSize + 1024 * 1024;
     public static IServiceCollection AddApi(this IServiceCollection services, IConfiguration configuration)
