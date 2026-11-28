@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using ImAI.Infrastructure.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using System.Globalization;
 namespace ImAI.Infrastructure;
 
 public static class DependencyInjection
@@ -27,6 +28,17 @@ public static class DependencyInjection
         services.AddScoped<IAnonymousSessionService, AnonymousSessionService>();
         services.AddScoped<IConversationStore, ConversationStore>();
         services.AddScoped<IConversationContextReader, ConversationContextReader>();
+        services.AddOptions<ConversationSummaryOptions>()
+            .Configure(options =>
+            {
+                var value = configuration[$"{ConversationSummaryOptions.SectionName}:KLimit"];
+                if (value is null) return;
+                if (!long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var limit))
+                    throw new InvalidOperationException("ConversationSummary:KLimit must be a positive integer.");
+                options.KLimit = limit;
+            })
+            .Validate(options => options.KLimit > 0, "ConversationSummary:KLimit must be greater than zero.")
+            .ValidateOnStart();
         services.AddOptions<ConversationContextOptions>()
             .Configure(options => options.SystemInstructions =
                 configuration[$"{ConversationContextOptions.SectionName}:SystemInstructions"] ?? string.Empty)

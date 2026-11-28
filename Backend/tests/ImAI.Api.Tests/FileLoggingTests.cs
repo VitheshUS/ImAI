@@ -114,6 +114,25 @@ public sealed class FileLoggingTests
     }
 
     [Fact]
+    public async Task MissingDeferredSummaryPublisherIsLoggedWithoutFailingTheSavedChat()
+    {
+        await using var host = new LoggingHost(kLimit: 1);
+        using var client = await host.CreateSessionClient();
+
+        var response = await Send(client, "Question");
+
+        Assert.Equal(LoggingHost.Answer, response.Result);
+        var events = host.ReadEvents("ai-chat-*.jsonl");
+        var failed = Assert.Single(events, entry => EventName(entry) == "ConversationSummaryPublishFailed");
+        Assert.Equal(0, failed.GetProperty("LastSummarizedSequence").GetInt64());
+        Assert.DoesNotContain(events, entry => EventName(entry) == "AiRequestFailed");
+        using var scope = host.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ImAiDbContext>();
+        Assert.Equal(2, await database.ChatMessages.CountAsync());
+        Assert.Equal(0, await database.ConversationSummaries.CountAsync());
+    }
+
+    [Fact]
     public async Task LogsAiFailureAndFinalHttpStatusWithoutSavingAnExchange()
     {
         await using var host = new LoggingHost(failAi: true);
@@ -163,7 +182,7 @@ public sealed class FileLoggingTests
         return (await response.Content.ReadFromJsonAsync<AiChatResponse>())!;
     }
 
-    private sealed class LoggingHost(bool failAi = false, bool enabled = true, string logLevel = "Information") : WebApplicationFactory<Program>
+    private sealed class LoggingHost(bool failAi = false, bool enabled = true, string logLevel = "Information", long kLimit = 10) : WebApplicationFactory<Program>
     {
         public const string Answer = "AI answer\nwith \"quotes\".";
         private readonly string directory = Path.Combine(Path.GetTempPath(), $"imai-logging-test-{Guid.NewGuid():N}");
@@ -176,6 +195,7 @@ public sealed class FileLoggingTests
             {
                 ["ConnectionStrings:ImAI"] = $"Data Source={Path.Combine(directory, "test.db")};Pooling=False",
                 ["Logging:File:Enabled"] = enabled.ToString(),
+                ["ConversationSummary:KLimit"] = kLimit.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["Logging:LogLevel:Default"] = logLevel,
                 ["Logging:File:Path"] = Path.Combine(directory, "app-.jsonl"),
                 ["Logging:File:AiChatPath"] = Path.Combine(directory, "ai-chat-.jsonl")

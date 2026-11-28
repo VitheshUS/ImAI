@@ -2,6 +2,7 @@ using ImAI.Application.Abstractions;
 using ImAI.Application.Common;
 using ImAI.Application.Configuration;
 using ImAI.Application.Dtos;
+using ImAI.Application.ConversationSummaries;
 using ImAI.Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Options;
@@ -17,8 +18,10 @@ public sealed class SendChatQueryHandler(
     IConversationStore conversations,
     IConversationContextReader contextReader,
     IOptions<ConversationContextOptions> options,
+    IOptions<ConversationSummaryOptions> summaryOptions,
     TimeProvider clock,
-    ILogger<SendChatQueryHandler> logger)
+    ILogger<SendChatQueryHandler> logger,
+    ISender sender)
     : IRequestHandler<SendChatQuery, AiChatResponse>
 {
     public async Task<AiChatResponse> Handle(SendChatQuery request, CancellationToken cancellationToken)
@@ -83,6 +86,28 @@ public sealed class SendChatQueryHandler(
             "Chat exchange saved: user message {UserMessageId} sequence {UserSequence}, assistant message {MessageId} sequence {AssistantSequence}; completed in {ElapsedMilliseconds} ms",
             userMessage.Id, userMessage.Sequence, assistantMessage.Id, assistantMessage.Sequence,
             Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        var lastSummarizedSequence = conversation.Summary?.LastSummarizedSequence ?? 0;
+        var difference = assistantMessage.Sequence - lastSummarizedSequence;
+        if (difference > summaryOptions.Value.KLimit)
+        {
+            try
+            {
+                // This exchange is committed; a client disconnect should not cancel its publication.
+                var accepted = await sender.Send(new RequestConversationSummary(
+                    conversation.Id, request.SessionId, lastSummarizedSequence), CancellationToken.None);
+                logger.Log(accepted ? LogLevel.Information : LogLevel.Warning,
+                    new EventId(2004, "ConversationSummaryPublishAttempt"),
+                    "Summary request publication accepted: {Accepted}; current sequence {CurrentSequence}, last summarized sequence {LastSummarizedSequence}, difference {SequenceDifference}, K limit {KLimit}",
+                    accepted, assistantMessage.Sequence, lastSummarizedSequence, difference, summaryOptions.Value.KLimit);
+            }
+            catch (Exception exception)
+            {
+                // Background publication must not fail a chat whose messages are already saved.
+                logger.LogWarning(new EventId(2005, "ConversationSummaryPublishFailed"), exception,
+                    "Summary request publication failed for last summarized sequence {LastSummarizedSequence}; the chat exchange is saved",
+                    lastSummarizedSequence);
+            }
+        }
         return new(conversation.Id, assistantMessage.Id, result, []);
     }
 }

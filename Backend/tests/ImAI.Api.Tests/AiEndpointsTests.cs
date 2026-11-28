@@ -3,8 +3,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ImAI.Api.Cookies;
 using ImAI.Application.Abstractions;
+using ImAI.Application.Abstractions.Messaging;
 using ImAI.Application.Chat;
 using ImAI.Application.Dtos;
+using ImAI.Application.Dtos.Events;
 using ImAI.Application.Common;
 using ImAI.Application.Sessions;
 using ImAI.Infrastructure.Persistence;
@@ -19,6 +21,68 @@ namespace ImAI.Api.Tests;
 
 public sealed class AiEndpointsTests
 {
+    [Theory]
+    [InlineData(null, 6L, false)]
+    [InlineData(null, 5L, true)]
+    [InlineData(2L, 4L, false)]
+    [InlineData(2L, 3L, true)]
+    [InlineData(4L, 3L, false)]
+    [InlineData(4L, 1L, true)]
+    public async Task SummaryPublicationUsesStrictThresholdAndTheSummaryCheckpoint(long? boundary, long limit, bool shouldPublish)
+    {
+        using var factory = new ConversationHost { KLimit = limit };
+        using var client = await factory.CreateSessionClient();
+        var first = await Send(client, "first question");
+        await Send(client, "second question", first.ConversationId);
+        if (boundary is { } checkpoint)
+        {
+            using var seedScope = factory.Services.CreateScope();
+            var database = seedScope.ServiceProvider.GetRequiredService<ImAiDbContext>();
+            database.ConversationSummaries.Add(new ImAI.Domain.Entities.ConversationSummary
+            {
+                ConversationId = first.ConversationId, Content = "Saved summary", LastSummarizedSequence = checkpoint
+            });
+            await database.SaveChangesAsync();
+        }
+        factory.SummaryEvents.Clear();
+        factory.SequencesAtPublication.Clear();
+
+        await Send(client, "current question", first.ConversationId);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ImAiDbContext>();
+        var conversation = await db.Conversations.SingleAsync();
+        Assert.Equal(6, await db.ChatMessages.CountAsync());
+        Assert.Equal(boundary.HasValue ? 1 : 0, await db.ConversationSummaries.CountAsync());
+        Assert.Equal(boundary.HasValue ? "Saved summary" : string.Empty, factory.Calls[2].ConversationSummary);
+        if (shouldPublish)
+        {
+            Assert.Equal(new ConversationSummaryRequestedEvent(first.ConversationId, conversation.SessionId, boundary ?? 0), Assert.Single(factory.SummaryEvents));
+            Assert.Equal(6, Assert.Single(factory.SequencesAtPublication));
+        }
+        else
+        {
+            Assert.Empty(factory.SummaryEvents);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task RejectedOrFailedPublicationDoesNotFailTheSavedChat(bool accepted, bool throws)
+    {
+        using var factory = new ConversationHost { KLimit = 1, AcceptSummary = accepted, ThrowOnPublish = throws };
+        using var client = await factory.CreateSessionClient();
+
+        var reply = await Send(client, "question");
+
+        Assert.Equal(ConversationHost.Answer, reply.Result);
+        Assert.Equal(0, Assert.Single(factory.SummaryEvents).LastSummarizedSequence);
+        Assert.Equal(2, Assert.Single(factory.SequencesAtPublication));
+        using var scope = factory.Services.CreateScope();
+        Assert.Equal(2, await scope.ServiceProvider.GetRequiredService<ImAiDbContext>().ChatMessages.CountAsync());
+    }
+
     [Fact]
     public async Task FirstPromptCreatesConversationAndSavesBothMessages()
     {
@@ -185,9 +249,10 @@ public sealed class AiEndpointsTests
     [Fact]
     public async Task FailedAiCallDoesNotPersistPartialExchange()
     {
-        using var factory = new ConversationHost();
+        using var factory = new ConversationHost { KLimit = 1 };
         using var client = await factory.CreateSessionClient();
         var first = await Send(client, "hello");
+        factory.SummaryEvents.Clear();
         factory.Fail = true;
         var response = await client.PostAsJsonAsync("/api/ai/chat", new { query = "fail", conversationId = first.ConversationId });
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
@@ -197,6 +262,7 @@ public sealed class AiEndpointsTests
         var db = scope.ServiceProvider.GetRequiredService<ImAiDbContext>();
         Assert.Equal(1, await db.Conversations.CountAsync());
         Assert.Equal(2, await db.ChatMessages.CountAsync());
+        Assert.Empty(factory.SummaryEvents);
     }
 
     [Fact]
@@ -210,9 +276,11 @@ public sealed class AiEndpointsTests
     [Fact]
     public async Task ConcurrentPromptsDoNotSilentlyOverwriteConversationHistory()
     {
-        using var factory = new ConversationHost();
+        using var factory = new ConversationHost { KLimit = 1 };
         using var client = await factory.CreateSessionClient();
         var original = await Send(client, "start");
+        factory.SummaryEvents.Clear();
+        factory.SequencesAtPublication.Clear();
         factory.SynchronizeCalls = true;
         var responses = await Task.WhenAll(new[] { "next one", "next two" }.Select(query =>
             client.PostAsJsonAsync("/api/ai/chat", new { query, conversationId = original.ConversationId })));
@@ -222,6 +290,8 @@ public sealed class AiEndpointsTests
         var db = scope.ServiceProvider.GetRequiredService<ImAiDbContext>();
         Assert.Equal(1, await db.Conversations.CountAsync());
         Assert.Equal(4, await db.ChatMessages.CountAsync());
+        Assert.Single(factory.SummaryEvents);
+        Assert.Equal(4, Assert.Single(factory.SequencesAtPublication));
     }
 
     [Fact]
@@ -277,11 +347,16 @@ public sealed class AiEndpointsTests
         return (await response.Content.ReadFromJsonAsync<AiChatResponse>())!;
     }
 
-    private sealed class ConversationHost : WebApplicationFactory<Program>, IAzureChatService
+    private sealed class ConversationHost : WebApplicationFactory<Program>, IAzureChatService, IConversationSummaryEventPublisher
     {
         public const string Answer = "AI answer";
         private readonly string databasePath = Path.Combine(Path.GetTempPath(), $"imai-chat-test-{Guid.NewGuid():N}.db");
         public List<ConversationContextDto> Calls { get; } = [];
+        public List<ConversationSummaryRequestedEvent> SummaryEvents { get; } = [];
+        public List<long> SequencesAtPublication { get; } = [];
+        public long KLimit { get; set; } = 10;
+        public bool AcceptSummary { get; set; } = true;
+        public bool ThrowOnPublish { get; set; }
         public bool Fail { get; set; }
         public bool FailAuthentication { get; set; }
         public bool SynchronizeCalls { get; set; }
@@ -289,11 +364,15 @@ public sealed class AiEndpointsTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
-            { ["ConnectionStrings:ImAI"] = $"Data Source={databasePath};Pooling=False" }));
+            {
+                ["ConnectionStrings:ImAI"] = $"Data Source={databasePath};Pooling=False",
+                ["ConversationSummary:KLimit"] = KLimit.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            }));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IAzureChatService>();
                 services.AddSingleton<IAzureChatService>(this);
+                services.AddSingleton<IConversationSummaryEventPublisher>(this);
             });
         }
         public async Task<HttpClient> CreateSessionClient()
@@ -317,6 +396,20 @@ public sealed class AiEndpointsTests
             if (FailAuthentication) throw new AiServiceUnavailableException("AI service authentication is not configured on the server.", new InvalidOperationException("private credential detail"));
             if (Fail) throw new InvalidOperationException("Test AI failure");
             return Answer;
+        }
+        public bool TryPublish(ConversationSummaryRequestedEvent summaryEvent)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ImAiDbContext>();
+            var latestSequence = db.ChatMessages.Where(message => message.ConversationId == summaryEvent.ConversationId
+                && message.Conversation.SessionId == summaryEvent.SessionId).Max(message => message.Sequence);
+            lock (SummaryEvents)
+            {
+                SummaryEvents.Add(summaryEvent);
+                SequencesAtPublication.Add(latestSequence);
+            }
+            if (ThrowOnPublish) throw new InvalidOperationException("Test publication failure");
+            return AcceptSummary;
         }
         protected override void Dispose(bool disposing)
         {

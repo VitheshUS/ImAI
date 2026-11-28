@@ -38,6 +38,7 @@ Uploads accept PDF, DOCX, Markdown, TXT, CSV, and JSON extensions. Files must be
 - Azure credentials: Development uses `AzureCliCredential` to match the signed-in Azure CLI identity. `AzureOpenAI:TenantId` pins the resource tenant, and optional `AzureOpenAI:AzureCliDirectory` adds a portable CLI directory to the application process PATH. Outside Development, the default credential mode is `Default`. Set `AzureOpenAI:Credential` to `AzureCli` or `Default` explicitly to override it.
 - `ConnectionStrings:ImAI`: optional SQLite connection string. Default: `Backend/imai.db` in this checkout, or `imai.db` beside published binaries. `ConnectionStrings__ImAI` overrides both runtime configuration and EF tooling. The design-time factory otherwise uses the default path; it does not load API appsettings files.
 - `ConversationContext:SystemInstructions`: required system instructions, configured in API `appsettings.json`. Shared by the conversation context reader and Azure chat service; override through environment-specific configuration or `ConversationContext__SystemInstructions`.
+- `ConversationSummary:KLimit`: positive message-count threshold, currently `10`. Both user and assistant messages count. Override with `ConversationSummary__KLimit`.
 - `Cors:AllowedOrigins`: exact HTTP(S) origins. Defaults: `http://localhost:4200` and `https://localhost:4200`. CORS and POST origin validation share one normalized configuration. Wildcards, credentials, and non-root paths are rejected.
 
 Use the same site and scheme for frontend and API with SameSite=Lax cookies; different HTTPS localhost ports are supported. The frontend initializes its session and connects chat, conversation history, and conversation deletion to this API. Document management retains its frontend demo implementation.
@@ -61,6 +62,7 @@ Each HTTP request receives a logging scope with `TraceId`, `RequestId`, method, 
 4. `AiRequestSending`: actual role/content messages passed to `IChatClient`, in order.
 5. `AiResponseReceived`: full returned text, model/response IDs when supplied, and elapsed time; `AiRequestFailed` records exceptions and `AiRequestCancelled` records cancellation.
 6. `ChatExchangeSaved`: persisted message IDs, sequences, and total elapsed time. This appears only after successful persistence.
+7. `ConversationSummaryPublishAttempt`: acceptance/rejection when the sequence difference exceeds K, with the current sequence, summary checkpoint, difference, and configured K. `ConversationSummaryPublishFailed` records publication exceptions, including the deferred publisher's missing registration, without failing the saved chat.
 
 Each file line is one JSON event; prompt/response newlines are escaped inside JSON properties. Full chat content is intentionally logged. Cookies, authorization headers, session tokens, and Azure access tokens are not included in application log payloads. These logs show the messages provided to the SDK, not raw HTTP authentication headers or transport bodies. Server error exceptions continue to be logged by the global exception handler.
 
@@ -141,6 +143,26 @@ The reader projects directly from the session-owned conversation and related mes
 Message sequences start at 1 independently for each conversation and increase by one per message (user, then assistant). A unique `(ConversationId, Sequence)` index enforces uniqueness. The sequence migration backfills existing rows in `CreatedAt`, then `Id` order before creating the index. Run the database update command above for existing databases.
 
 For existing conversations, the chat handler calls the reader before generation and passes `ConversationContextDto` to `IAzureChatService`; a missing conversation is rejected rather than silently replaced with empty history. For a new, unsaved conversation it builds a context with configured instructions and the current query. The Azure adapter sends the configured system instructions, optional JSON summary/knowledge reference data as a user message, recent messages with their actual user/assistant roles, then the current prompt exactly once. Reference data is not promoted to system instructions. The current exchange is saved only after generation succeeds, so it is not duplicated in recent history. The reader does not create or update summaries; automatic summarization and knowledge retrieval are still deferred.
+
+## Conversation summary event contract
+
+The Application layer defines `ConversationSummaryRequestedEvent` in `Dtos/Events`. It contains `ConversationId`, `SessionId`, and `LastSummarizedSequence`, the checkpoint from the existing summary row. A checkpoint of `0` means no messages have been summarized. The event requests generation for messages after this checkpoint; it does not contain a generated summary or the latest message sequence.
+
+`Abstractions/Messaging/IConversationSummaryEventPublisher` groups the messaging port separately from persistence, AI, and session abstractions. Its `bool TryPublish(ConversationSummaryRequestedEvent summaryEvent)` reports whether the request was accepted for processing. A true result is not a guarantee of generation, persistence, or durable delivery; false must be handled by the caller according to the eventual retry policy.
+
+The MediatR `RequestConversationSummaryHandler` in `ConversationSummaries` validates non-empty IDs and a non-negative checkpoint, creates the event, and returns the publisher's acceptance result. Application DI registers the handler through a factory so the existing API can start before an Infrastructure publisher is supplied. Invoking this handler requires Infrastructure to register `IConversationSummaryEventPublisher`; no default implementation silently discards events.
+
+`SendChatQueryHandler` loads the session-owned conversation with its optional summary, calls AI, and commits both messages before checking the threshold:
+
+```text
+currentSequence = saved assistant message sequence
+lastSummarizedSequence = summary.LastSummarizedSequence, or 0 if no summary exists
+publish when currentSequence - lastSummarizedSequence > ConversationSummary:KLimit
+```
+
+The comparison is strictly greater than K. With K=10 and no summary, sequences through 10 do not trigger publication; the next saved exchange reaches sequence 12 and attempts publication with checkpoint 0. Existing summaries are still sent to AI alongside messages after their checkpoint and the current prompt. Failed AI calls and failed/conflicting saves do not publish. Once an exchange is saved, publication rejection or failure is logged and does not change the successful chat response. Publication is attempted again on later qualifying exchanges until the summary checkpoint advances; pending-event deduplication is not implemented.
+
+The Infrastructure publisher, queue, background worker, and summary generation remain deferred. Until a publisher is registered, qualifying chats log `ConversationSummaryPublishFailed` and retain their successful response; no event delivery or summary generation occurs. Tests register a fake publisher to verify the payload, strict threshold, and commit-before-publication ordering.
 
 ## Temporary SQLite explorer
 

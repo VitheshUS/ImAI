@@ -29,7 +29,7 @@ internal sealed class ConversationStore(ImAiDbContext database) : IConversationS
     }
 
     public Task<Conversation?> FindAsync(Guid sessionId, Guid conversationId, CancellationToken cancellationToken) =>
-        database.Conversations.Include(conversation => conversation.ChatMessages)
+        database.Conversations.Include(conversation => conversation.ChatMessages).Include(conversation => conversation.Summary)
             .SingleOrDefaultAsync(conversation => conversation.Id == conversationId && conversation.SessionId == sessionId, cancellationToken);
 
     public async Task SaveExchangeAsync(Conversation conversation, ChatMessage userMessage, ChatMessage assistantMessage, CancellationToken cancellationToken)
